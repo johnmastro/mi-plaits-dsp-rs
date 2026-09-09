@@ -15,7 +15,10 @@ num-traits = { version = "0.2", default-features = false, features = ["libm"] }
 spin = { version = "0.12.1", features = ["once"] }
 
 [dev-dependencies]
+audio-midi-shell = "0.1.0"
+blake3 = "1.8.2"
 hound = "3.5.1"
 log = "0.4.26"
+serde = { version = "1.0.219", features = ["derive"] }
 simple_logger = "5.0.0"
-audio-midi-shell = "0.1.0"
+toml = "0.9.5"
