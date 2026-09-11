@@ -11,9 +11,12 @@ use std::sync::{Mutex, MutexGuard};
 
 use blake3::Hasher;
 use hound::{SampleFormat, WavSpec, WavWriter};
+use mi_plaits_dsp::engine::TriggerState;
 use mi_plaits_dsp::resources::sysex::{SYX_BANK_0, SYX_BANK_1, SYX_BANK_2};
 use mi_plaits_dsp::utils::random::{self, Rng};
-use mi_plaits_dsp::voice::{Modulations, NUM_ENGINES, Patch, Voice};
+use mi_plaits_dsp::voice::{
+    IMMEDIATE_TRIGGER_DELAY, LEGACY_TRIGGER_DELAY, Modulations, NUM_ENGINES, Patch, Voice,
+};
 use serde::{Deserialize, Serialize};
 
 const MANIFEST_SCHEMA: u32 = 1;
@@ -214,6 +217,7 @@ struct RecordedScenario {
 struct ScenarioRender {
     recorded: RecordedScenario,
     samples: Option<(Vec<f32>, Vec<f32>)>,
+    first_rising_edge_block: Option<usize>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -416,8 +420,19 @@ enum Sweep {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 enum TriggerDelay {
+    /// Preserves the upstream read index of eight, which is seven logical
+    /// render calls of latency.
     LegacyEight,
     Zero,
+}
+
+impl TriggerDelay {
+    fn blocks(self) -> usize {
+        match self {
+            Self::LegacyEight => LEGACY_TRIGGER_DELAY,
+            Self::Zero => IMMEDIATE_TRIGGER_DELAY,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -492,6 +507,7 @@ impl StereoAccumulator {
                 aux: self.aux.finish().map_err(|error| format!("aux {error}"))?,
             },
             samples: self.samples,
+            first_rising_edge_block: None,
         })
     }
 }
@@ -568,8 +584,9 @@ fn rng_guard() -> MutexGuard<'static, ()> {
         .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
-fn scenario_voice<'a>(seed: u32) -> Voice<'a> {
-    let mut voice = Voice::new(BLOCK_SIZE, SAMPLE_RATE as f32);
+fn scenario_voice<'a>(seed: u32, trigger_delay: TriggerDelay) -> Voice<'a> {
+    let mut voice =
+        Voice::new_with_trigger_delay(BLOCK_SIZE, SAMPLE_RATE as f32, trigger_delay.blocks());
     voice.seed_rng(seed);
     voice
 }
@@ -928,17 +945,18 @@ fn render_scenario_with_seed(
             config.engine, config.engine_name, ENGINE_NAMES[config.engine]
         ));
     }
-    if config.trigger_delay != TriggerDelay::LegacyEight {
-        return Err("zero trigger delay is unavailable in golden scenarios".to_owned());
-    }
     if !config.execution.is_single() {
         return Err("special execution config passed to single-voice renderer".to_owned());
     }
 
     let six_op_bank = six_op_bank_override(config)?;
     let mut voice = match seed {
-        Some(seed) => scenario_voice(seed),
-        None => Voice::new(BLOCK_SIZE, SAMPLE_RATE as f32),
+        Some(seed) => scenario_voice(seed, config.trigger_delay),
+        None => Voice::new_with_trigger_delay(
+            BLOCK_SIZE,
+            SAMPLE_RATE as f32,
+            config.trigger_delay.blocks(),
+        ),
     };
     if let Some(bank) = six_op_bank.as_ref() {
         match config.engine {
@@ -958,6 +976,7 @@ fn render_scenario_with_seed(
     let mut accumulated = StereoAccumulator::new(expected_samples, capture_samples);
     let mut out = [0.0; BLOCK_SIZE];
     let mut aux = [0.0; BLOCK_SIZE];
+    let mut first_rising_edge_block = None;
 
     for block in 0..config.blocks {
         apply_sweep(
@@ -969,10 +988,15 @@ fn render_scenario_with_seed(
         );
         apply_gate(&mut patch, &mut modulations, &config.gate, block)?;
         voice.render(&patch, &modulations, &mut out, &mut aux);
+        if first_rising_edge_block.is_none() && voice.last_trigger() == TriggerState::RisingEdge {
+            first_rising_edge_block = Some(block);
+        }
         accumulated.update(&out, &aux)?;
     }
 
-    accumulated.finish(config.clone())
+    let mut render = accumulated.finish(config.clone())?;
+    render.first_rising_edge_block = first_rising_edge_block;
+    Ok(render)
 }
 
 fn apply_sweep(patch: &mut Patch, base: &PatchConfig, sweep: &Sweep, block: usize, blocks: usize) {
@@ -1159,12 +1183,19 @@ fn render_coupled_voices(
     capture_samples: bool,
 ) -> Result<CouplingRender, String> {
     let (noise_config, particle_config) = coupling_voice_configs()?;
-    if noise_config.blocks != particle_config.blocks || noise_config.seed != particle_config.seed {
-        return Err("coupled voices must have equal block counts and a shared seed".to_owned());
+    if noise_config.blocks != particle_config.blocks
+        || noise_config.seed != particle_config.seed
+        || noise_config.trigger_delay != TriggerDelay::LegacyEight
+        || particle_config.trigger_delay != TriggerDelay::LegacyEight
+    {
+        return Err(
+            "coupled voices require equal block counts, a shared seed, and legacy delays"
+                .to_owned(),
+        );
     }
 
-    let mut noise_voice = scenario_voice(noise_config.seed);
-    let mut particle_voice = scenario_voice(noise_config.seed);
+    let mut noise_voice = scenario_voice(noise_config.seed, noise_config.trigger_delay);
+    let mut particle_voice = scenario_voice(particle_config.seed, particle_config.trigger_delay);
     noise_voice.init();
     particle_voice.init();
 
@@ -1368,13 +1399,14 @@ fn render_engine_switch(
     if period_blocks == 0
         || alternate_engine >= NUM_ENGINES
         || alternate_engine_name != ENGINE_NAMES[alternate_engine]
-        || alternate_trigger_delay != TriggerDelay::LegacyEight
+        || config.trigger_delay != TriggerDelay::LegacyEight
+        || alternate_trigger_delay != config.trigger_delay
         || !alternate_resources.is_default()
     {
         return Err("invalid engine-switch configuration".to_owned());
     }
 
-    let mut voice = scenario_voice(config.seed);
+    let mut voice = scenario_voice(config.seed, config.trigger_delay);
     voice.init();
     let mut primary_patch = config.patch.to_patch(config.engine);
     let mut secondary_patch = alternate_patch.to_patch(alternate_engine);
@@ -1494,7 +1526,7 @@ fn render_clone_continuations(
     }
 
     let six_op_bank = six_op_bank_override(config)?;
-    let mut original_voice = scenario_voice(config.seed);
+    let mut original_voice = scenario_voice(config.seed, config.trigger_delay);
     if let Some(bank) = six_op_bank.as_ref() {
         match config.engine {
             2 => original_voice.resources.syx_bank_a = bank,
@@ -1977,6 +2009,102 @@ fn scenario_manifest_round_trips_and_rejects_duplicate_names() {
 }
 
 #[test]
+fn trigger_delay_mapping_is_applied_to_scenario_voices() {
+    assert_eq!(TriggerDelay::LegacyEight.blocks(), LEGACY_TRIGGER_DELAY);
+    assert_eq!(TriggerDelay::Zero.blocks(), IMMEDIATE_TRIGGER_DELAY);
+
+    for trigger_delay in [TriggerDelay::LegacyEight, TriggerDelay::Zero] {
+        let voice = scenario_voice(DEFAULT_SEED, trigger_delay);
+        assert_eq!(voice.trigger_delay(), trigger_delay.blocks());
+    }
+}
+
+#[test]
+fn paired_scenarios_observe_zero_and_legacy_edges_seven_blocks_apart() {
+    let mut legacy = scenario_config(0, Gate::RiseAfter { block: 2 }, Sweep::None);
+    legacy.blocks = 16;
+    let mut zero = legacy.clone();
+    zero.trigger_delay = TriggerDelay::Zero;
+
+    let legacy_render = render_scenario(&legacy, false).unwrap();
+    let zero_render = render_scenario(&zero, false).unwrap();
+
+    assert_eq!(zero_render.first_rising_edge_block, Some(2));
+    assert_eq!(legacy_render.first_rising_edge_block, Some(9));
+    assert_eq!(
+        legacy_render.first_rising_edge_block.unwrap()
+            - zero_render.first_rising_edge_block.unwrap(),
+        LEGACY_TRIGGER_DELAY
+    );
+}
+
+#[test]
+fn every_manifest_producing_scenario_remains_on_legacy_delay() {
+    let mut configs = core_scenario_configs()
+        .unwrap()
+        .into_values()
+        .collect::<Vec<_>>();
+    configs.extend(level_cv_trigger_configs().unwrap().into_values());
+    configs.extend(random_scenario_configs().unwrap().into_values());
+    configs.extend(six_op_depth_configs().unwrap().into_values());
+
+    let (noise, particle) = coupling_voice_configs().unwrap();
+    for render_order in [
+        CouplingOrder::NoiseThenParticle,
+        CouplingOrder::ParticleThenNoise,
+    ] {
+        configs.push(coupled_record_config(
+            &noise,
+            &particle,
+            render_order,
+            CoupledVoice::Noise,
+        ));
+        configs.push(coupled_record_config(
+            &particle,
+            &noise,
+            render_order,
+            CoupledVoice::Particle,
+        ));
+    }
+
+    for (period_blocks, _) in ENGINE_SWITCH_PERIODS {
+        configs.push(engine_switch_config(period_blocks).unwrap());
+    }
+
+    for (_, config, _) in clone_case_configs() {
+        configs.push(clone_record_config(&config, CloneContinuation::Original));
+        configs.push(clone_record_config(&config, CloneContinuation::Clone));
+    }
+
+    assert_eq!(configs.len(), 291);
+    for (index, config) in configs.iter().enumerate() {
+        assert_eq!(
+            config.trigger_delay,
+            TriggerDelay::LegacyEight,
+            "primary delay for scenario {index}"
+        );
+        match &config.execution {
+            ExecutionConfig::Coupled {
+                peer_trigger_delay, ..
+            } => assert_eq!(
+                *peer_trigger_delay,
+                TriggerDelay::LegacyEight,
+                "peer delay for scenario {index}"
+            ),
+            ExecutionConfig::EngineSwitch {
+                alternate_trigger_delay,
+                ..
+            } => assert_eq!(
+                *alternate_trigger_delay,
+                TriggerDelay::LegacyEight,
+                "alternate delay for scenario {index}"
+            ),
+            ExecutionConfig::Single | ExecutionConfig::CloneContinuation { .. } => {}
+        }
+    }
+}
+
+#[test]
 fn core_scenarios_have_complete_unique_engine_coverage() {
     let scenarios = core_scenario_configs().unwrap();
     assert_eq!(scenarios.len(), NUM_ENGINES * 9);
@@ -2185,7 +2313,7 @@ fn owned_default_matches_historical_default_sequence() {
 
 #[test]
 fn voice_init_is_rng_neutral() {
-    let mut voice = scenario_voice(7);
+    let mut voice = scenario_voice(7, TriggerDelay::LegacyEight);
     voice.init();
     assert_eq!(voice.rng().state(), 7);
 }

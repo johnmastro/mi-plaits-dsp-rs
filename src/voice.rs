@@ -36,7 +36,37 @@ use crate::utils::limiter::Limiter;
 use crate::utils::random::Rng;
 use crate::utils::units::semitones_to_ratio;
 
-const MAX_TRIGGER_DELAY: usize = 8;
+const TRIGGER_DELAY_LINE_LENGTH: usize = 8;
+
+/// Immediate gate detection on the render that receives the input.
+///
+/// Same-render parameter changes can still pass through engine smoothing on
+/// the attack's first block; the upstream seven-block delay pre-settles them.
+/// The `tests/trigger_settling.rs` diagnostic compares these timings with pitch
+/// supplied through `Patch::note`:
+///
+/// - Particle, string, modal, six-op, and analog drum outputs are bit-exact;
+///   synthetic drums differ only during the 24-sample f0 sweep.
+/// - VA-VCF and FM differ only in phase, not magnitude spectrum.
+/// - Noise has the only measured settling artifact: filter and clock-rate
+///   interpolation changes the attack by about 4.5 dB for 10–18 ms.
+/// - Additive and speech differences reflect history-dependent beat or clock
+///   phase under every delay, not settling specific to this delay.
+///
+/// Use `Patch::note` for event pitch. `render` averages `Modulations::note`
+/// with its previous value, making the edge block run at the midpoint pitch;
+/// edge-latched engines can preserve that error for the entire note.
+pub const IMMEDIATE_TRIGGER_DELAY: usize = 0;
+
+/// Largest construction-time trigger delay, in render calls.
+pub const MAX_TRIGGER_DELAY: usize = TRIGGER_DELAY_LINE_LENGTH - 1;
+
+/// Behavior of the upstream port: seven render calls of latency.
+pub const LEGACY_TRIGGER_DELAY: usize = 7;
+
+/// Delay selected by [`Voice::new`].
+pub const DEFAULT_TRIGGER_DELAY: usize = LEGACY_TRIGGER_DELAY;
+
 pub const NUM_ENGINES: usize = 24;
 
 /// Patch parameters.
@@ -205,7 +235,10 @@ pub struct Voice<'a> {
     decay_envelope: DecayEnvelope,
     lpg_envelope: LpgEnvelope,
 
-    trigger_delay: DelayLine<f32, MAX_TRIGGER_DELAY>,
+    trigger_delay: DelayLine<f32, TRIGGER_DELAY_LINE_LENGTH>,
+    trigger_delay_blocks: usize,
+    pending_trigger: bool,
+    last_trigger: TriggerState,
 
     out_post_processor: ChannelPostProcessor,
     aux_post_processor: ChannelPostProcessor,
@@ -217,6 +250,29 @@ pub struct Voice<'a> {
 
 impl Voice<'_> {
     pub fn new(block_size: usize, sample_rate_hz: f32) -> Self {
+        Self::new_with_trigger_delay(block_size, sample_rate_hz, DEFAULT_TRIGGER_DELAY)
+    }
+
+    /// Constructs a voice with a fixed gate-input delay in render calls.
+    ///
+    /// Non-default delays can measurably change the rendered audio, not just
+    /// its timing. See [`IMMEDIATE_TRIGGER_DELAY`] for details about the
+    /// effect on the zero-delay case.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `trigger_delay_blocks` is greater than
+    /// [`MAX_TRIGGER_DELAY`].
+    pub fn new_with_trigger_delay(
+        block_size: usize,
+        sample_rate_hz: f32,
+        trigger_delay_blocks: usize,
+    ) -> Self {
+        assert!(
+            trigger_delay_blocks <= MAX_TRIGGER_DELAY,
+            "trigger delay must be at most {MAX_TRIGGER_DELAY} blocks"
+        );
+
         let inv_sr = 1.0 / sample_rate_hz;
         let a0_normalized = 55.0 * inv_sr;
 
@@ -259,6 +315,9 @@ impl Voice<'_> {
             lpg_envelope: LpgEnvelope::new(),
 
             trigger_delay: DelayLine::new(),
+            trigger_delay_blocks,
+            pending_trigger: false,
+            last_trigger: TriggerState::Low,
 
             out_post_processor: ChannelPostProcessor::new(),
             aux_post_processor: ChannelPostProcessor::new(),
@@ -267,6 +326,25 @@ impl Voice<'_> {
             inv_sr,
             a0_normalized,
         }
+    }
+
+    pub fn trigger_delay(&self) -> usize {
+        self.trigger_delay_blocks
+    }
+
+    /// Forces one rising edge on the next render.
+    ///
+    /// The forced render discards queued gate history and resynchronizes the gate
+    /// delay line to that render's [`Modulations::trigger`] value. Subsequent gate
+    /// changes incur the voice's configured delay normally. Repeated calls before
+    /// a render coalesce into one event.
+    pub fn trigger(&mut self) {
+        self.pending_trigger = true;
+    }
+
+    /// Returns the trigger state sent to the engine on the most recent render.
+    pub fn last_trigger(&self) -> TriggerState {
+        self.last_trigger
     }
 
     pub fn init(&mut self) {
@@ -312,23 +390,30 @@ impl Voice<'_> {
     ) {
         // Trigger, LPG, internal envelope.
 
-        // Delay trigger by 1ms to deal with sequencers or MIDI interfaces whose
-        // CV out lags behind the GATE out.
+        let forced = core::mem::replace(&mut self.pending_trigger, false);
+
+        if forced {
+            self.trigger_delay.fill(modulations.trigger);
+        }
+
         self.trigger_delay.write(modulations.trigger);
-        let trigger_value = self.trigger_delay.read_with_delay(MAX_TRIGGER_DELAY);
+        let trigger_value = self
+            .trigger_delay
+            .read_with_delay(self.trigger_delay_blocks + 1);
 
         let previous_trigger_state = self.trigger_state;
+        let mut rising_edge = false;
 
-        if !previous_trigger_state {
-            if trigger_value > 0.3 {
-                self.trigger_state = true;
-                if !modulations.level_patched {
-                    self.lpg_envelope.trigger();
-                }
-                self.decay_envelope.trigger();
-                self.engine_cv = modulations.engine;
+        if forced || (!previous_trigger_state && trigger_value > 0.3) {
+            self.trigger_state = true;
+            rising_edge = true;
+
+            if !modulations.level_patched {
+                self.lpg_envelope.trigger();
             }
-        } else if trigger_value < 0.1 {
+            self.decay_envelope.trigger();
+            self.engine_cv = modulations.engine;
+        } else if previous_trigger_state && trigger_value < 0.1 {
             self.trigger_state = false;
         }
 
@@ -377,7 +462,6 @@ impl Voice<'_> {
             ..Default::default()
         };
 
-        let rising_edge = self.trigger_state && !previous_trigger_state;
         let note = (modulations.note + self.previous_note) * 0.5;
         self.previous_note = modulations.note;
 
@@ -392,6 +476,7 @@ impl Voice<'_> {
         } else {
             p.trigger = TriggerState::Unpatched;
         }
+        self.last_trigger = p.trigger;
 
         let short_decay = (200.0 * out.len() as f32)
             * self.inv_sr

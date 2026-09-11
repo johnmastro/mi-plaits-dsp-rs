@@ -44,6 +44,12 @@ where
         self.write_ptr = 0;
     }
 
+    /// Replaces all queued samples with `value` without changing the write
+    /// pointer or configured read delay.
+    pub fn fill(&mut self, value: T) {
+        self.line.fill(value);
+    }
+
     pub fn max_delay(&self) -> usize {
         MAX_DELAY
     }
@@ -122,5 +128,34 @@ where
                 + x0.to_f32().unwrap_or_default(),
         )
         .unwrap_or_default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DelayLine;
+
+    #[test]
+    fn fill_replaces_history_without_disturbing_write_read_ordering() {
+        let mut delay = DelayLine::<i32, 4>::new();
+        delay.set_delay(2);
+        delay.write(1);
+        delay.write(2);
+        delay.write(3);
+
+        delay.fill(9);
+
+        for read_delay in 0..delay.max_delay() {
+            assert_eq!(delay.read_with_delay(read_delay), 9);
+        }
+        assert_eq!(delay.read(), 9);
+
+        delay.write(10);
+        assert_eq!(delay.read_with_delay(1), 10);
+        assert_eq!(delay.read(), 9);
+
+        delay.write(20);
+        assert_eq!(delay.read_with_delay(1), 20);
+        assert_eq!(delay.read(), 10);
     }
 }
