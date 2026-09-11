@@ -19,6 +19,7 @@ use super::{Engine, EngineParameters, TriggerState, note_to_frequency};
 use crate::noise::clocked_noise::ClockedNoise;
 use crate::utils::filter::{FilterMode, FrequencyApproximation, Svf};
 use crate::utils::parameter_interpolator::ParameterInterpolator;
+use crate::utils::random::Rng;
 use crate::utils::sqrt;
 use crate::utils::units::semitones_to_ratio;
 
@@ -72,6 +73,7 @@ impl Engine for NoiseEngine {
         out: &mut [f32],
         aux: &mut [f32],
         _already_enveloped: &mut bool,
+        rng: &mut Rng,
     ) {
         let sustain = matches!(parameters.trigger, TriggerState::Unpatched);
         let trigger = matches!(parameters.trigger, TriggerState::RisingEdge);
@@ -88,8 +90,8 @@ impl Engine for NoiseEngine {
         );
         let q = 0.5 * semitones_to_ratio(parameters.morph * 120.0);
         let sync = trigger;
-        self.clocked_noise[0].render(sync, clock_f, aux);
-        self.clocked_noise[1].render(sync, clock_f * f1 / f0, &mut self.temp_buffer);
+        self.clocked_noise[0].render(sync, clock_f, aux, rng);
+        self.clocked_noise[1].render(sync, clock_f * f1 / f0, &mut self.temp_buffer, rng);
 
         let mut f0_modulation = ParameterInterpolator::new(&mut self.previous_f0, f0, out.len());
         let mut f1_modulation = ParameterInterpolator::new(&mut self.previous_f1, f1, out.len());

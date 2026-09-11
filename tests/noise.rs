@@ -4,6 +4,7 @@ mod common;
 
 use common::*;
 use mi_plaits_dsp::noise::*;
+use mi_plaits_dsp::utils::random::Rng;
 
 const BLOCK_SIZE: usize = 24;
 
@@ -11,6 +12,7 @@ const BLOCK_SIZE: usize = 24;
 fn clocked_noise() {
     let frequency = 10.0;
     let duration = 1.0;
+    let mut rng = Rng::new(0x21);
 
     for sample_rate in SAMPLE_RATES {
         let mut noise = clocked_noise::ClockedNoise::new();
@@ -22,7 +24,7 @@ fn clocked_noise() {
         let f = frequency / sample_rate as f32;
 
         for _ in 0..blocks {
-            noise.render(false, f, &mut out);
+            noise.render(false, f, &mut out, &mut rng);
             wav_data.extend_from_slice(&out);
         }
 
@@ -35,6 +37,7 @@ fn clocked_noise() {
 fn dust() {
     let frequency = 20.0;
     let duration = 1.0;
+    let mut rng = Rng::new(0x21);
 
     for sample_rate in SAMPLE_RATES {
         let mut wav_data = Vec::new();
@@ -43,7 +46,7 @@ fn dust() {
         let f = frequency / sample_rate as f32;
 
         for _ in 0..samples {
-            let out = dust::dust(f);
+            let out = dust::dust(f, &mut rng);
             wav_data.push(out);
         }
 
@@ -60,6 +63,7 @@ fn particle() {
     let spread = 0.5;
     let q = 0.9;
     let duration = 1.0;
+    let mut rng = Rng::new(0x21);
 
     for sample_rate in SAMPLE_RATES {
         let mut noise = particle::Particle::new();
@@ -76,7 +80,9 @@ fn particle() {
             out.fill(0.0);
             aux.fill(0.0);
             let sync = n % (blocks / 5) == 0;
-            noise.render(sync, density, gain, f, spread, q, &mut out, &mut aux);
+            noise.render(
+                sync, density, gain, f, spread, q, &mut out, &mut aux, &mut rng,
+            );
             wav_data.extend_from_slice(&out);
             wav_data_aux.extend_from_slice(&aux);
         }
@@ -93,6 +99,7 @@ fn particle() {
 fn smooth_random_generator() {
     let frequency = 10.0;
     let duration = 1.0;
+    let mut rng = Rng::new(0x21);
 
     for sample_rate in SAMPLE_RATES {
         let mut osc = smooth_random_generator::SmoothRandomGenerator::new();
@@ -103,7 +110,7 @@ fn smooth_random_generator() {
         let f = frequency / sample_rate as f32;
 
         for _ in 0..samples {
-            let out = osc.render(f);
+            let out = osc.render(f, &mut rng);
             wav_data.push(out);
         }
 

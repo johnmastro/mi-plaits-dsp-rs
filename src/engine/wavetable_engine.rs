@@ -26,6 +26,7 @@ use crate::oscillator::wavetable_oscillator::{Differentiator, interpolate_wave_h
 use crate::resources::waves::WAV_INTEGRATED_WAVES;
 use crate::utils::one_pole;
 use crate::utils::parameter_interpolator::SimpleParameterInterpolator;
+use crate::utils::random::Rng;
 
 const TABLE_SIZE: usize = 128;
 const TABLE_SIZE_F: f32 = TABLE_SIZE as f32;
@@ -132,6 +133,7 @@ impl Engine for WavetableEngine<'_> {
         out: &mut [f32],
         aux: &mut [f32],
         _already_enveloped: &mut bool,
+        _rng: &mut Rng,
     ) {
         let f0 = note_to_frequency(parameters.note, parameters.a0_normalized);
 

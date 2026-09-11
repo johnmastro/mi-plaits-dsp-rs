@@ -1,6 +1,7 @@
 //! Tests for fm engine
 
 use mi_plaits_dsp::engine::*;
+use mi_plaits_dsp::utils::random::Rng;
 const SAMPLE_RATE: f32 = 48000.0;
 const A0_NORMALIZED: f32 = 55.0 / SAMPLE_RATE;
 
@@ -21,6 +22,7 @@ fn fm_engine_harmonics() {
     let duration = 2.0;
     let blocks = (duration * SAMPLE_RATE / (BLOCK_SIZE as f32)) as usize;
     let mut already_enveloped = false;
+    let mut rng = Rng::new(0x21);
 
     for n in 0..blocks {
         let parameters = EngineParameters {
@@ -37,7 +39,13 @@ fn fm_engine_harmonics() {
             a0_normalized: A0_NORMALIZED,
         };
 
-        engine.render(&parameters, &mut out, &mut aux, &mut already_enveloped);
+        engine.render(
+            &parameters,
+            &mut out,
+            &mut aux,
+            &mut already_enveloped,
+            &mut rng,
+        );
         wav_data.extend_from_slice(&out);
         wav_data_aux.extend_from_slice(&aux);
     }
@@ -64,6 +72,7 @@ fn fm_engine_timbre() {
     let duration = 2.0;
     let blocks = (duration * SAMPLE_RATE / (BLOCK_SIZE as f32)) as usize;
     let mut already_enveloped = false;
+    let mut rng = Rng::new(0x21);
 
     for n in 0..blocks {
         let parameters = EngineParameters {
@@ -80,7 +89,13 @@ fn fm_engine_timbre() {
             a0_normalized: A0_NORMALIZED,
         };
 
-        engine.render(&parameters, &mut out, &mut aux, &mut already_enveloped);
+        engine.render(
+            &parameters,
+            &mut out,
+            &mut aux,
+            &mut already_enveloped,
+            &mut rng,
+        );
         wav_data.extend_from_slice(&out);
         wav_data_aux.extend_from_slice(&aux);
     }
@@ -107,6 +122,7 @@ fn fm_engine_morph() {
     let duration = 2.0;
     let blocks = (duration * SAMPLE_RATE / (BLOCK_SIZE as f32)) as usize;
     let mut already_enveloped = false;
+    let mut rng = Rng::new(0x21);
 
     for n in 0..blocks {
         let parameters = EngineParameters {
@@ -123,7 +139,13 @@ fn fm_engine_morph() {
             a0_normalized: A0_NORMALIZED,
         };
 
-        engine.render(&parameters, &mut out, &mut aux, &mut already_enveloped);
+        engine.render(
+            &parameters,
+            &mut out,
+            &mut aux,
+            &mut already_enveloped,
+            &mut rng,
+        );
         wav_data.extend_from_slice(&out);
         wav_data_aux.extend_from_slice(&aux);
     }

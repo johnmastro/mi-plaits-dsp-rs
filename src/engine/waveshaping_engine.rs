@@ -17,6 +17,7 @@ use crate::oscillator::sine_oscillator::sine;
 use crate::resources::{fold::LUT_FOLD, fold::LUT_FOLD_2, waveshape::LOOKUP_TABLE_I16_TABLE};
 use crate::utils::interpolate_hermite;
 use crate::utils::parameter_interpolator::ParameterInterpolator;
+use crate::utils::random::Rng;
 
 #[derive(Debug, Default, Clone)]
 pub struct WaveshapingEngine {
@@ -49,6 +50,7 @@ impl Engine for WaveshapingEngine {
         out: &mut [f32],
         aux: &mut [f32],
         _already_enveloped: &mut bool,
+        _rng: &mut Rng,
     ) {
         let root = parameters.note;
 

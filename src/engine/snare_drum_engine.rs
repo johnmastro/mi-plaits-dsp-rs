@@ -15,6 +15,7 @@
 use super::{Engine, EngineParameters, TriggerState, note_to_frequency};
 use crate::drums::analog_snare_drum::AnalogSnareDrum;
 use crate::drums::synthetic_snare_drum::SyntheticSnareDrum;
+use crate::utils::random::Rng;
 
 #[derive(Debug, Default, Clone)]
 pub struct SnareDrumEngine {
@@ -41,6 +42,7 @@ impl Engine for SnareDrumEngine {
         out: &mut [f32],
         aux: &mut [f32],
         _already_enveloped: &mut bool,
+        rng: &mut Rng,
     ) {
         let f0 = note_to_frequency(parameters.note, parameters.a0_normalized);
 
@@ -56,6 +58,7 @@ impl Engine for SnareDrumEngine {
             parameters.morph,
             parameters.harmonics,
             out,
+            rng,
         );
 
         self.synthetic_snare_drum.render(
@@ -67,6 +70,7 @@ impl Engine for SnareDrumEngine {
             parameters.morph,
             parameters.harmonics,
             aux,
+            rng,
         );
     }
 }

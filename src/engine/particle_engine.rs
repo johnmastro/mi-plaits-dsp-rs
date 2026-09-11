@@ -19,6 +19,7 @@ use super::{Engine, EngineParameters, TriggerState, note_to_frequency};
 use crate::fx::diffuser::Diffuser;
 use crate::noise::particle::Particle;
 use crate::utils::filter::{FilterMode, FrequencyApproximation, Svf};
+use crate::utils::random::Rng;
 use crate::utils::units::semitones_to_ratio;
 
 const NUM_PARTICLES: usize = 6;
@@ -64,6 +65,7 @@ impl Engine for ParticleEngine {
         out: &mut [f32],
         aux: &mut [f32],
         _already_enveloped: &mut bool,
+        rng: &mut Rng,
     ) {
         let f0 = note_to_frequency(parameters.note, parameters.a0_normalized);
         let density_sqrt = note_to_frequency(
@@ -92,7 +94,7 @@ impl Engine for ParticleEngine {
         aux.fill(0.0);
 
         for particle in &mut self.particle {
-            particle.render(sync, density, gain, f0, spread, q, out, aux);
+            particle.render(sync, density, gain, f0, spread, q, out, aux, rng);
         }
 
         self.post_filter

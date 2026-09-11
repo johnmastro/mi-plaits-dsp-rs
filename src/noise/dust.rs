@@ -2,12 +2,12 @@
 
 // Based on MIT-licensed code (c) 2016 by Emilie Gillet (emilie.o.gillet@gmail.com)
 
-use crate::utils::random;
+use crate::utils::random::Rng;
 
 #[inline]
-pub fn dust(frequency: f32) -> f32 {
+pub fn dust(frequency: f32, rng: &mut Rng) -> f32 {
     let inv_frequency = 1.0 / frequency;
-    let u = random::get_float();
+    let u = rng.get_float();
 
     if u < frequency {
         u * inv_frequency

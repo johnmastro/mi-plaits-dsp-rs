@@ -20,6 +20,7 @@ use crate::oscillator::nes_triangle_oscillator::NesTriangleOscillator;
 use crate::oscillator::super_square_oscillator::SuperSquareOscillator;
 use crate::utils::hysteresis_quantizer::HysteresisQuantizer2;
 use crate::utils::one_pole;
+use crate::utils::random::Rng;
 use crate::utils::units::semitones_to_ratio;
 
 pub const NO_ENVELOPE: f32 = 2.0;
@@ -92,6 +93,7 @@ impl Engine for ChiptuneEngine {
         out: &mut [f32],
         aux: &mut [f32],
         already_enveloped: &mut bool,
+        rng: &mut Rng,
     ) {
         let f0 = note_to_frequency(parameters.note, parameters.a0_normalized);
         let shape = parameters.morph * 0.995;
@@ -109,7 +111,7 @@ impl Engine for ChiptuneEngine {
                 self.arpeggiator
                     .set_mode(ArpeggiatorMode::from(pattern / 3));
                 self.arpeggiator.set_range(1 << (pattern % 3));
-                self.arpeggiator.clock(self.chords.num_notes());
+                self.arpeggiator.clock(self.chords.num_notes(), rng);
                 self.envelope_state = 1.0;
             }
 

@@ -21,6 +21,7 @@ use crate::fm::{
     voice::{Voice, VoiceParameters},
 };
 use crate::utils::hysteresis_quantizer::HysteresisQuantizer2;
+use crate::utils::random::Rng;
 use crate::utils::soft_clip;
 
 const NUM_SIX_OP_VOICES: usize = 2;
@@ -91,6 +92,7 @@ impl Engine for SixOpEngine<'_> {
         out: &mut [f32],
         aux: &mut [f32],
         _already_enveloped: &mut bool,
+        rng: &mut Rng,
     ) {
         let patch_index = self
             .patch_index_quantizer
@@ -100,7 +102,7 @@ impl Engine for SixOpEngine<'_> {
             let t = parameters.morph;
             self.voice[0]
                 .mutable_lfo()
-                .scrub(2.0 * self.sample_rate * t);
+                .scrub(2.0 * self.sample_rate * t, rng);
 
             let pitch_mod = self.voice[0].lfo().pitch_mod();
             let amp_mod = self.voice[0].lfo().amp_mod();
@@ -129,7 +131,7 @@ impl Engine for SixOpEngine<'_> {
             p.envelope_control = parameters.morph;
             self.voice[self.active_voice as usize]
                 .mutable_lfo()
-                .step(out.len() as f32);
+                .step(out.len() as f32, rng);
 
             let active_voice_lfo = self.voice[self.active_voice as usize].lfo();
             let active_voice_pitch_mod = active_voice_lfo.pitch_mod();
@@ -151,7 +153,7 @@ impl Engine for SixOpEngine<'_> {
                 p.gate =
                     (parameters.trigger == TriggerState::High) && (i == self.active_voice as usize);
                 if voice_patch_changed[i] {
-                    voice.mutable_lfo().step(out.len() as f32);
+                    voice.mutable_lfo().step(out.len() as f32, rng);
                     voice.set_modulations(voice.lfo().pitch_mod(), voice.lfo().amp_mod());
                 } else {
                     voice.set_modulations(active_voice_pitch_mod, active_voice_amp_mod);

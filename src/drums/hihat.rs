@@ -9,7 +9,7 @@
 use crate::oscillator::oscillator::{Oscillator, OscillatorShape};
 use crate::utils::filter::{FilterMode, FrequencyApproximation, Svf};
 use crate::utils::parameter_interpolator::ParameterInterpolator;
-use crate::utils::random;
+use crate::utils::random::Rng;
 use crate::utils::units::semitones_to_ratio;
 
 pub enum NoiseType {
@@ -75,6 +75,7 @@ impl Hihat {
         vca_type: VcaType,
         resonance: bool,
         two_stage_envelope: bool,
+        rng: &mut Rng,
     ) {
         let envelope_decay = 1.0 - 0.003 * semitones_to_ratio(-decay * 84.0);
         let cut_decay = 1.0 - 0.0025 * semitones_to_ratio(-decay * 36.0);
@@ -116,7 +117,7 @@ impl Hihat {
             self.noise_clock += noise_f;
             if self.noise_clock >= 1.0 {
                 self.noise_clock -= 1.0;
-                self.noise_sample = random::get_float() - 0.5;
+                self.noise_sample = rng.get_float() - 0.5;
             }
             *out_sample += noisiness * (self.noise_sample - *out_sample);
         }

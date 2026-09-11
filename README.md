@@ -23,6 +23,12 @@ The major motivation behind this port is:
 
 The APIs used in this crate are kept close to the original ones intentionally, resulting in a number of clippy warnings that have been suppressed.
 
+## Randomness
+
+Every `Voice` owns an independent `Rng` that starts at `DEFAULT_SEED`. Use `Voice::seed_rng` to restart a voice with a chosen deterministic random sequence.
+
+Code that renders an `Engine` or a random component directly must construct an `Rng` and pass it through the render calls. The process-wide functions in `utils::random` remain available as a separate legacy API; they do not affect a `Voice` or an owned `Rng`.
+
 ## Tests
 
 Run `cargo test` to run a number of integration tests that produce `WAV` files in the `./out` directory.

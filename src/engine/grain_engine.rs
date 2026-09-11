@@ -19,6 +19,7 @@ use super::{Engine, EngineParameters, note_to_frequency};
 use crate::oscillator::grainlet_oscillator::GrainletOscillator;
 use crate::oscillator::z_oscillator::ZOscillator;
 use crate::utils::filter::{FilterMode, FrequencyApproximation, OnePole};
+use crate::utils::random::Rng;
 use crate::utils::units::semitones_to_ratio;
 
 #[derive(Debug, Default, Clone)]
@@ -50,6 +51,7 @@ impl Engine for GrainEngine {
         out: &mut [f32],
         aux: &mut [f32],
         _already_enveloped: &mut bool,
+        _rng: &mut Rng,
     ) {
         let root = parameters.note;
         let f0 = note_to_frequency(root, parameters.a0_normalized);

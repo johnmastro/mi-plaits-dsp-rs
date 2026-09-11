@@ -18,7 +18,7 @@ use crate::oscillator::sine_oscillator::{FastSineOscillator, sine};
 use crate::utils::one_pole;
 use crate::utils::parameter_interpolator::ParameterInterpolator;
 use crate::utils::polyblep::{next_blep_sample, this_blep_sample};
-use crate::utils::random;
+use crate::utils::random::Rng;
 use crate::utils::units::semitones_to_ratio;
 
 const NUM_SWARM_VOICES: usize = 8;
@@ -57,6 +57,7 @@ impl Engine for SwarmEngine {
         out: &mut [f32],
         aux: &mut [f32],
         _already_enveloped: &mut bool,
+        rng: &mut Rng,
     ) {
         let f0 = note_to_frequency(parameters.note, parameters.a0_normalized);
         let control_rate = out.len() as f32;
@@ -85,6 +86,7 @@ impl Engine for SwarmEngine {
                 size_ratio,
                 out,
                 aux,
+                rng,
             );
             size_ratio *= 0.97;
         }
@@ -124,8 +126,9 @@ impl SwarmVoice {
         size_ratio: f32,
         saw: &mut [f32],
         sine: &mut [f32],
+        rng: &mut Rng,
     ) {
-        self.envelope.step(density, burst_mode, start_burst);
+        self.envelope.step(density, burst_mode, start_burst, rng);
 
         let scale = 1.0 / NUM_SWARM_VOICES as f32;
         let amplitude = self.envelope.amplitude(size_ratio) * scale;
@@ -225,7 +228,7 @@ impl GrainEnvelope {
     }
 
     #[inline]
-    pub fn step(&mut self, rate: f32, burst_mode: bool, start_burst: bool) {
+    pub fn step(&mut self, rate: f32, burst_mode: bool, start_burst: bool, rng: &mut Rng) {
         let mut randomize = false;
 
         if start_burst {
@@ -242,12 +245,12 @@ impl GrainEnvelope {
 
         if randomize {
             self.from += self.interval;
-            self.interval = random::get_float() - self.from;
+            self.interval = rng.get_float() - self.from;
             // Randomize the duration of the grain.
             if burst_mode {
-                self.fm *= 0.8 + 0.2 * random::get_float();
+                self.fm *= 0.8 + 0.2 * rng.get_float();
             } else {
-                self.fm = 0.5 + 1.5 * random::get_float();
+                self.fm = 0.5 + 1.5 * rng.get_float();
             }
         }
     }

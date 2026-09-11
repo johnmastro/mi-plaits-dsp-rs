@@ -4,6 +4,7 @@ mod common;
 
 use common::*;
 use mi_plaits_dsp::drums::*;
+use mi_plaits_dsp::utils::random::Rng;
 
 const BLOCK_SIZE: usize = 24;
 
@@ -55,6 +56,7 @@ fn analog_snare_drum() {
     let decay = 0.5;
     let snappy = 0.2;
     let duration = 0.5;
+    let mut rng = Rng::new(0x21);
 
     for sample_rate in SAMPLE_RATES {
         let mut drum = analog_snare_drum::AnalogSnareDrum::new();
@@ -67,7 +69,9 @@ fn analog_snare_drum() {
 
         for n in 0..blocks {
             let trigger = n == 0;
-            drum.render(false, trigger, accent, f0, tone, decay, snappy, &mut out);
+            drum.render(
+                false, trigger, accent, f0, tone, decay, snappy, &mut out, &mut rng,
+            );
             wav_data.extend_from_slice(&out);
         }
 
@@ -84,6 +88,7 @@ fn hihat() {
     let decay = 0.5;
     let noisiness = 0.0;
     let duration = 0.5;
+    let mut rng = Rng::new(0x21);
 
     for sample_rate in SAMPLE_RATES {
         let mut drum = hihat::Hihat::new();
@@ -113,6 +118,7 @@ fn hihat() {
                 hihat::VcaType::Swing,
                 false,
                 false,
+                &mut rng,
             );
             wav_data.extend_from_slice(&out);
         }
@@ -132,6 +138,7 @@ fn synthetic_bass_drum() {
     let fm_envelope_amount = 0.5;
     let fm_envelope_decay = 0.5;
     let duration = 0.5;
+    let mut rng = Rng::new(0x21);
 
     for sample_rate in SAMPLE_RATES {
         let mut drum = synthetic_bass_drum::SyntheticBassDrum::new();
@@ -155,6 +162,7 @@ fn synthetic_bass_drum() {
                 fm_envelope_amount,
                 fm_envelope_decay,
                 &mut out,
+                &mut rng,
             );
             wav_data.extend_from_slice(&out);
         }
@@ -172,6 +180,7 @@ fn synthetic_snare_drum() {
     let decay = 0.3;
     let snappy = 0.2;
     let duration = 0.5;
+    let mut rng = Rng::new(0x21);
 
     for sample_rate in SAMPLE_RATES {
         let mut drum = synthetic_snare_drum::SyntheticSnareDrum::new();
@@ -185,7 +194,7 @@ fn synthetic_snare_drum() {
         for n in 0..blocks {
             let trigger = n == 0;
             drum.render(
-                false, trigger, accent, f0, fm_amount, decay, snappy, &mut out,
+                false, trigger, accent, f0, fm_amount, decay, snappy, &mut out, &mut rng,
             );
             wav_data.extend_from_slice(&out);
         }

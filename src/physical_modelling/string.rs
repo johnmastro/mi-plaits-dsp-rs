@@ -6,7 +6,7 @@ use crate::resources::svf::LUT_SVF_SHIFT;
 use crate::utils::delay_line::DelayLine;
 use crate::utils::filter::{DcBlocker, FilterMode, FrequencyApproximation, Svf};
 use crate::utils::parameter_interpolator::ParameterInterpolator;
-use crate::utils::random;
+use crate::utils::random::Rng;
 use crate::utils::units::semitones_to_ratio;
 use crate::utils::{crossfade, one_pole};
 
@@ -82,6 +82,7 @@ impl String {
         self.src_phase = 0.0;
     }
 
+    #[allow(clippy::too_many_arguments)]
     #[inline]
     pub fn process(
         &mut self,
@@ -91,6 +92,7 @@ impl String {
         damping: f32,
         in_: &[f32],
         out: &mut [f32],
+        rng: &mut Rng,
     ) {
         if non_linearity_amount <= 0.0 {
             self.process_internal(
@@ -101,6 +103,7 @@ impl String {
                 in_,
                 out,
                 StringNonLinearity::CurvedBridge,
+                rng,
             );
         } else {
             self.process_internal(
@@ -111,6 +114,7 @@ impl String {
                 in_,
                 out,
                 StringNonLinearity::Dispersion,
+                rng,
             );
         }
     }
@@ -126,6 +130,7 @@ impl String {
         in_: &[f32],
         out: &mut [f32],
         non_linearity: StringNonLinearity,
+        rng: &mut Rng,
     ) {
         let delay = (1.0 / f0).clamp(4.0, DELAY_LINE_SIZE as f32 - 4.0);
 
@@ -194,7 +199,7 @@ impl String {
                 let mut s;
 
                 if matches!(non_linearity, StringNonLinearity::Dispersion) {
-                    let noise = random::get_float() - 0.5;
+                    let noise = rng.get_float() - 0.5;
                     one_pole(&mut self.dispersion_noise, noise, noise_filter);
                     delay *= 1.0 + self.dispersion_noise * noise_amount;
                 } else {

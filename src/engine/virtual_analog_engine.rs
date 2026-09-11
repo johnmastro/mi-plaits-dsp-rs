@@ -20,6 +20,7 @@ use super::{Engine, EngineParameters, note_to_frequency};
 use crate::oscillator::variable_saw_oscillator::VariableSawOscillator;
 use crate::oscillator::variable_shape_oscillator::VariableShapeOscillator;
 use crate::utils::parameter_interpolator::ParameterInterpolator;
+use crate::utils::random::Rng;
 
 #[derive(Debug, Clone)]
 pub struct VirtualAnalogEngine {
@@ -67,6 +68,7 @@ impl Engine for VirtualAnalogEngine {
         out: &mut [f32],
         aux: &mut [f32],
         _already_enveloped: &mut bool,
+        _rng: &mut Rng,
     ) {
         // VA_VARIANT 2
         // 1 = variable square controlled by TIMBRE.

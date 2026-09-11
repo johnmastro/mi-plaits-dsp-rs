@@ -33,6 +33,7 @@ use crate::utils::clip_16;
 use crate::utils::delay_line::DelayLine;
 use crate::utils::hysteresis_quantizer::HysteresisQuantizer2;
 use crate::utils::limiter::Limiter;
+use crate::utils::random::Rng;
 use crate::utils::units::semitones_to_ratio;
 
 const MAX_TRIGGER_DELAY: usize = 8;
@@ -191,6 +192,7 @@ pub struct Voice<'a> {
 
     pub resources: Resources<'a>,
 
+    rng: Rng,
     engine_quantizer: HysteresisQuantizer2,
 
     reload_resources: bool,
@@ -244,6 +246,7 @@ impl Voice<'_> {
 
             resources: Resources::default(),
 
+            rng: Rng::default(),
             engine_quantizer: HysteresisQuantizer2::new(),
             reload_resources: false,
             previous_engine_index: 0,
@@ -282,6 +285,21 @@ impl Voice<'_> {
     #[inline]
     pub fn reload_resources(&mut self) {
         self.reload_resources = true;
+    }
+
+    /// Returns this voice's owned random number generator.
+    pub fn rng(&self) -> &Rng {
+        &self.rng
+    }
+
+    /// Returns this voice's owned random number generator mutably.
+    pub fn rng_mut(&mut self) -> &mut Rng {
+        &mut self.rng
+    }
+
+    /// Restarts this voice's owned random number generator at `seed`.
+    pub fn seed_rng(&mut self, seed: u32) {
+        self.rng.seed(seed);
     }
 
     #[inline]
@@ -470,12 +488,10 @@ impl Voice<'_> {
             1.0,
         );
 
-        let engine = self.get_engine(engine_index).unwrap();
-        let mut already_enveloped = engine.1;
-        let out_gain = engine.2;
-        let aux_gain = engine.3;
+        let (engine, rng, mut already_enveloped, out_gain, aux_gain) =
+            self.get_engine(engine_index).unwrap();
 
-        engine.0.render(&p, out, aux, &mut already_enveloped);
+        engine.render(&p, out, aux, &mut already_enveloped, rng);
 
         let lpg_bypass =
             already_enveloped || (!modulations.level_patched && !modulations.trigger_patched);
@@ -524,34 +540,37 @@ impl Voice<'_> {
     }
 
     /// Return reference to engine by index as well as additional parameters
-    fn get_engine(&mut self, index: usize) -> Option<(&mut dyn Engine, bool, f32, f32)> {
-        match index {
-            0 => Some((&mut self.virtual_analog_vcf_engine, false, 1.0, 1.0)),
-            1 => Some((&mut self.phase_distortion_engine, false, 0.7, 0.7)),
-            2 => Some((&mut self.six_op_engine, true, 1.0, 1.0)),
-            3 => Some((&mut self.six_op_engine, true, 1.0, 1.0)),
-            4 => Some((&mut self.six_op_engine, true, 1.0, 1.0)),
-            5 => Some((&mut self.waveterrain_engine, false, 0.7, 0.7)),
-            6 => Some((&mut self.string_machine_engine, false, 0.8, 0.8)),
-            7 => Some((&mut self.chiptune_engine, false, 0.5, 0.5)),
-            8 => Some((&mut self.virtual_analog_engine, false, 0.8, 0.8)),
-            9 => Some((&mut self.waveshaping_engine, false, 0.7, 0.6)),
-            10 => Some((&mut self.fm_engine, false, 0.6, 0.6)),
-            11 => Some((&mut self.grain_engine, false, 0.7, 0.6)),
-            12 => Some((&mut self.additive_engine, false, 0.8, 0.8)),
-            13 => Some((&mut self.wavetable_engine, false, 0.6, 0.6)),
-            14 => Some((&mut self.chord_engine, false, 0.8, 0.8)),
-            15 => Some((&mut self.speech_engine, false, -0.7, 0.8)),
-            16 => Some((&mut self.swarm_engine, false, -3.0, 1.0)),
-            17 => Some((&mut self.noise_engine, false, -1.0, -1.0)),
-            18 => Some((&mut self.particle_engine, false, -2.0, 1.0)),
-            19 => Some((&mut self.string_engine, true, -1.0, 0.8)),
-            20 => Some((&mut self.modal_engine, true, -1.0, 0.8)),
-            21 => Some((&mut self.bass_drum_engine, true, 0.8, 0.8)),
-            22 => Some((&mut self.snare_drum_engine, true, 0.8, 0.8)),
-            23 => Some((&mut self.hihat_engine, true, 0.8, 0.8)),
-            _ => None,
-        }
+    fn get_engine(&mut self, index: usize) -> Option<(&mut dyn Engine, &mut Rng, bool, f32, f32)> {
+        let rng = &mut self.rng;
+        let (engine, already_enveloped, out_gain, aux_gain): (&mut dyn Engine, bool, f32, f32) =
+            match index {
+                0 => (&mut self.virtual_analog_vcf_engine, false, 1.0, 1.0),
+                1 => (&mut self.phase_distortion_engine, false, 0.7, 0.7),
+                2 => (&mut self.six_op_engine, true, 1.0, 1.0),
+                3 => (&mut self.six_op_engine, true, 1.0, 1.0),
+                4 => (&mut self.six_op_engine, true, 1.0, 1.0),
+                5 => (&mut self.waveterrain_engine, false, 0.7, 0.7),
+                6 => (&mut self.string_machine_engine, false, 0.8, 0.8),
+                7 => (&mut self.chiptune_engine, false, 0.5, 0.5),
+                8 => (&mut self.virtual_analog_engine, false, 0.8, 0.8),
+                9 => (&mut self.waveshaping_engine, false, 0.7, 0.6),
+                10 => (&mut self.fm_engine, false, 0.6, 0.6),
+                11 => (&mut self.grain_engine, false, 0.7, 0.6),
+                12 => (&mut self.additive_engine, false, 0.8, 0.8),
+                13 => (&mut self.wavetable_engine, false, 0.6, 0.6),
+                14 => (&mut self.chord_engine, false, 0.8, 0.8),
+                15 => (&mut self.speech_engine, false, -0.7, 0.8),
+                16 => (&mut self.swarm_engine, false, -3.0, 1.0),
+                17 => (&mut self.noise_engine, false, -1.0, -1.0),
+                18 => (&mut self.particle_engine, false, -2.0, 1.0),
+                19 => (&mut self.string_engine, true, -1.0, 0.8),
+                20 => (&mut self.modal_engine, true, -1.0, 0.8),
+                21 => (&mut self.bass_drum_engine, true, 0.8, 0.8),
+                22 => (&mut self.snare_drum_engine, true, 0.8, 0.8),
+                23 => (&mut self.hihat_engine, true, 0.8, 0.8),
+                _ => return None,
+            };
+        Some((engine, rng, already_enveloped, out_gain, aux_gain))
     }
 }
 

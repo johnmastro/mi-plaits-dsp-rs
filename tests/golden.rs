@@ -12,7 +12,7 @@ use std::sync::{Mutex, MutexGuard};
 use blake3::Hasher;
 use hound::{SampleFormat, WavSpec, WavWriter};
 use mi_plaits_dsp::resources::sysex::{SYX_BANK_0, SYX_BANK_1, SYX_BANK_2};
-use mi_plaits_dsp::utils::random;
+use mi_plaits_dsp::utils::random::{self, Rng};
 use mi_plaits_dsp::voice::{Modulations, NUM_ENGINES, Patch, Voice};
 use serde::{Deserialize, Serialize};
 
@@ -568,8 +568,10 @@ fn rng_guard() -> MutexGuard<'static, ()> {
         .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
-fn seed_scenario(seed: u32) {
-    random::seed(seed);
+fn scenario_voice<'a>(seed: u32) -> Voice<'a> {
+    let mut voice = Voice::new(BLOCK_SIZE, SAMPLE_RATE as f32);
+    voice.seed_rng(seed);
+    voice
 }
 
 fn round_four(value: f64) -> f64 {
@@ -909,6 +911,14 @@ fn render_scenario(
     config: &ScenarioConfig,
     capture_samples: bool,
 ) -> Result<ScenarioRender, String> {
+    render_scenario_with_seed(config, capture_samples, Some(config.seed))
+}
+
+fn render_scenario_with_seed(
+    config: &ScenarioConfig,
+    capture_samples: bool,
+    seed: Option<u32>,
+) -> Result<ScenarioRender, String> {
     if config.engine >= NUM_ENGINES {
         return Err(format!("invalid engine index {}", config.engine));
     }
@@ -925,9 +935,11 @@ fn render_scenario(
         return Err("special execution config passed to single-voice renderer".to_owned());
     }
 
-    seed_scenario(config.seed);
     let six_op_bank = six_op_bank_override(config)?;
-    let mut voice = Voice::new(BLOCK_SIZE, SAMPLE_RATE as f32);
+    let mut voice = match seed {
+        Some(seed) => scenario_voice(seed),
+        None => Voice::new(BLOCK_SIZE, SAMPLE_RATE as f32),
+    };
     if let Some(bank) = six_op_bank.as_ref() {
         match config.engine {
             2 => voice.resources.syx_bank_a = bank,
@@ -1151,9 +1163,8 @@ fn render_coupled_voices(
         return Err("coupled voices must have equal block counts and a shared seed".to_owned());
     }
 
-    seed_scenario(noise_config.seed);
-    let mut noise_voice = Voice::new(BLOCK_SIZE, SAMPLE_RATE as f32);
-    let mut particle_voice = Voice::new(BLOCK_SIZE, SAMPLE_RATE as f32);
+    let mut noise_voice = scenario_voice(noise_config.seed);
+    let mut particle_voice = scenario_voice(noise_config.seed);
     noise_voice.init();
     particle_voice.init();
 
@@ -1270,8 +1281,8 @@ fn validate_coupling_order_behavior(
         &noise_first.particle.recorded,
         &particle_first.particle.recorded,
     );
-    if !noise_order_dependent && !particle_order_dependent {
-        return Err("global-RNG coupling scenarios are unexpectedly order-independent".into());
+    if noise_order_dependent || particle_order_dependent {
+        return Err("per-voice RNG coupling scenarios remain order-dependent".into());
     }
     Ok(())
 }
@@ -1363,8 +1374,7 @@ fn render_engine_switch(
         return Err("invalid engine-switch configuration".to_owned());
     }
 
-    seed_scenario(config.seed);
-    let mut voice = Voice::new(BLOCK_SIZE, SAMPLE_RATE as f32);
+    let mut voice = scenario_voice(config.seed);
     voice.init();
     let mut primary_patch = config.patch.to_patch(config.engine);
     let mut secondary_patch = alternate_patch.to_patch(alternate_engine);
@@ -1483,9 +1493,8 @@ fn render_clone_continuations(
         return Err("invalid clone-continuation configuration".to_owned());
     }
 
-    seed_scenario(config.seed);
     let six_op_bank = six_op_bank_override(config)?;
-    let mut original_voice = Voice::new(BLOCK_SIZE, SAMPLE_RATE as f32);
+    let mut original_voice = scenario_voice(config.seed);
     if let Some(bank) = six_op_bank.as_ref() {
         match config.engine {
             2 => original_voice.resources.syx_bank_a = bank,
@@ -1604,9 +1613,9 @@ fn validate_clone_continuity_behavior(
             "non-random clone case {case_name:?} produced different continuations"
         ));
     }
-    if output_random && identical {
+    if output_random && !identical {
         return Err(format!(
-            "global-RNG clone case {case_name:?} unexpectedly produced identical continuations"
+            "per-voice RNG clone case {case_name:?} produced different continuations"
         ));
     }
     Ok(())
@@ -1833,7 +1842,6 @@ fn profile_name() -> &'static str {
 
 #[test]
 fn golden_all() -> Result<(), Box<dyn Error>> {
-    let _guard = rng_guard();
     let mode = Mode::from_environment()?;
 
     if !is_canonical_target() && mode == Mode::Record {
@@ -1877,9 +1885,6 @@ fn golden_all() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn harness_primitives_are_deterministic() {
-    let _guard = rng_guard();
-    seed_scenario(0x21);
-
     assert_eq!(Mode::from_value(None), Ok(Mode::Check));
     assert_eq!(Mode::from_value(Some(OsStr::new("check"))), Ok(Mode::Check));
     assert_eq!(
@@ -1997,7 +2002,6 @@ fn core_scenarios_have_complete_unique_engine_coverage() {
 
 #[test]
 fn level_cv_trigger_cases_cover_rising_and_repeated_edges() {
-    let _guard = rng_guard();
     let scenarios = level_cv_trigger_configs().unwrap();
     assert_eq!(scenarios.len(), 2);
     assert!(scenarios.values().all(|scenario| {
@@ -2081,7 +2085,6 @@ fn six_op_depth_scenarios_have_complete_coverage() {
 
 #[test]
 fn random_activation_cases_are_seed_sensitive() {
-    let _guard = rng_guard();
     let cases = random_case_configs();
     assert_eq!(cases.len(), 13);
     assert_eq!(
@@ -2124,11 +2127,67 @@ fn random_activation_cases_are_seed_sensitive() {
 }
 
 #[test]
-fn coupling_order_behavior_matches_global_rng() {
-    let _guard = rng_guard();
+fn coupling_order_behavior_matches_rng_capability() {
     let noise_first = render_coupled_voices(CouplingOrder::NoiseThenParticle, false).unwrap();
     let particle_first = render_coupled_voices(CouplingOrder::ParticleThenNoise, false).unwrap();
     validate_coupling_order_behavior(&noise_first, &particle_first).unwrap();
+}
+
+#[test]
+fn coupled_voices_match_standalone_voices() {
+    let (noise_config, particle_config) = coupling_voice_configs().unwrap();
+    let standalone_noise = render_scenario(&noise_config, false).unwrap();
+    let standalone_particle = render_scenario(&particle_config, false).unwrap();
+    let noise_first = render_coupled_voices(CouplingOrder::NoiseThenParticle, false).unwrap();
+    let particle_first = render_coupled_voices(CouplingOrder::ParticleThenNoise, false).unwrap();
+
+    for (order, coupled) in [
+        ("noise first", &noise_first),
+        ("particle first", &particle_first),
+    ] {
+        assert!(
+            same_audio(&coupled.noise.recorded, &standalone_noise.recorded),
+            "noise voice rendered {order} differs from its standalone render"
+        );
+        assert!(
+            same_audio(&coupled.particle.recorded, &standalone_particle.recorded),
+            "particle voice rendered {order} differs from its standalone render"
+        );
+    }
+}
+
+#[test]
+fn voice_rendering_leaves_legacy_generator_untouched() {
+    let _guard = rng_guard();
+    let legacy_seed = 0x1234_5678;
+    random::seed(legacy_seed);
+
+    let (noise_config, _) = coupling_voice_configs().unwrap();
+    render_scenario_with_seed(&noise_config, false, None).unwrap();
+
+    let mut expected = Rng::new(legacy_seed);
+    assert_eq!(random::get_word(), expected.get_word());
+}
+
+#[test]
+fn owned_default_matches_historical_default_sequence() {
+    let (noise_config, _) = coupling_voice_configs().unwrap();
+    assert_eq!(noise_config.seed, DEFAULT_SEED);
+
+    let explicitly_seeded = render_scenario(&noise_config, false).unwrap();
+    let owned_default = render_scenario_with_seed(&noise_config, false, None).unwrap();
+
+    assert!(same_audio(
+        &explicitly_seeded.recorded,
+        &owned_default.recorded
+    ));
+}
+
+#[test]
+fn voice_init_is_rng_neutral() {
+    let mut voice = scenario_voice(7);
+    voice.init();
+    assert_eq!(voice.rng().state(), 7);
 }
 
 #[test]
@@ -2156,8 +2215,7 @@ fn engine_switch_cases_cover_stress_and_sustained_periods() {
 }
 
 #[test]
-fn clone_continuity_matches_global_rng() {
-    let _guard = rng_guard();
+fn clone_continuity_matches_rng_capability() {
     let cases = clone_case_configs();
     assert_eq!(cases.len(), 16);
     assert_eq!(cases.iter().filter(|(_, _, random)| *random).count(), 13);

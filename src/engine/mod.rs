@@ -21,6 +21,7 @@ pub mod wavetable_engine;
 
 use dyn_clone::DynClone;
 
+use crate::utils::random::Rng;
 use crate::utils::units::semitones_to_ratio;
 
 pub trait Engine: Send + Sync + DynClone {
@@ -34,6 +35,7 @@ pub trait Engine: Send + Sync + DynClone {
         out: &mut [f32],
         aux: &mut [f32],
         already_enveloped: &mut bool,
+        rng: &mut Rng,
     );
 }
 

@@ -4,6 +4,7 @@ mod common;
 
 use common::*;
 use mi_plaits_dsp::physical_modelling::*;
+use mi_plaits_dsp::utils::random::Rng;
 
 const BLOCK_SIZE: usize = 24;
 
@@ -15,6 +16,7 @@ fn modal_voice() {
     let brightness = 0.5;
     let damping = 0.5;
     let duration = 2.0;
+    let mut rng = Rng::new(0x21);
 
     for sample_rate in SAMPLE_RATES {
         let mut model = modal_voice::ModalVoice::new();
@@ -47,6 +49,7 @@ fn modal_voice() {
                 &mut temp_2,
                 &mut out,
                 &mut aux,
+                &mut rng,
             );
             wav_data.extend_from_slice(&out);
             wav_data_aux.extend_from_slice(&aux);
@@ -102,6 +105,7 @@ fn string() {
     let brightness = 0.5;
     let damping = 0.7;
     let duration = 2.0;
+    let mut rng = Rng::new(0x21);
 
     for sample_rate in SAMPLE_RATES {
         let mut model = string::String::new();
@@ -125,6 +129,7 @@ fn string() {
                 damping,
                 &in_,
                 &mut out,
+                &mut rng,
             );
             wav_data.extend_from_slice(&out);
         }
@@ -142,6 +147,7 @@ fn string_voice() {
     let brightness = 0.5;
     let damping = 0.7;
     let duration = 2.0;
+    let mut rng = Rng::new(0x21);
 
     for sample_rate in SAMPLE_RATES {
         let mut model = string_voice::StringVoice::new();
@@ -174,6 +180,7 @@ fn string_voice() {
                 &mut temp_2,
                 &mut out,
                 &mut aux,
+                &mut rng,
             );
             wav_data.extend_from_slice(&out);
             wav_data_aux.extend_from_slice(&aux);

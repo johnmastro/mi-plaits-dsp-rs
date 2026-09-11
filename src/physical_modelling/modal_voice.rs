@@ -8,6 +8,7 @@
 use super::resonator::{MAX_NUM_MODES, Resonator, ResonatorSvf};
 use crate::noise::dust::dust;
 use crate::utils::filter::FilterMode;
+use crate::utils::random::Rng;
 use crate::utils::units::semitones_to_ratio;
 
 #[derive(Debug, Default, Clone)]
@@ -41,6 +42,7 @@ impl ModalVoice {
         temp_2: &mut [f32],
         out: &mut [f32],
         aux: &mut [f32],
+        rng: &mut Rng,
     ) {
         let density = brightness * brightness;
 
@@ -59,7 +61,7 @@ impl ModalVoice {
         if sustain {
             let dust_f = 0.00005 + 0.99995 * density * density;
             for sample_temp in temp.iter_mut() {
-                *sample_temp = dust(dust_f) * (4.0 - dust_f * 3.0) * accent;
+                *sample_temp = dust(dust_f, rng) * (4.0 - dust_f * 3.0) * accent;
             }
         } else {
             for temp_sample in temp.iter_mut() {

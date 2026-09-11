@@ -21,6 +21,7 @@ use crate::oscillator::sine_oscillator::{FastSineOscillator, sine};
 use crate::oscillator::wavetable_oscillator::interpolate_wave;
 use crate::resources::waves::WAV_INTEGRATED_WAVES;
 use crate::utils::parameter_interpolator::SimpleParameterInterpolator;
+use crate::utils::random::Rng;
 
 #[derive(Debug, Clone)]
 pub struct WaveTerrainEngine<'a> {
@@ -97,6 +98,7 @@ impl Engine for WaveTerrainEngine<'_> {
         out: &mut [f32],
         aux: &mut [f32],
         _already_enveloped: &mut bool,
+        _rng: &mut Rng,
     ) {
         const OVERSAMPLING: usize = 2;
         const SCALE: f32 = 1.0 / OVERSAMPLING as f32;

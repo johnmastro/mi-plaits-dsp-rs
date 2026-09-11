@@ -19,6 +19,7 @@ use alloc::vec;
 use super::{Engine, EngineParameters, TriggerState, note_to_frequency};
 use crate::physical_modelling::string_voice::StringVoice;
 use crate::utils::delay_line::DelayLine;
+use crate::utils::random::Rng;
 
 const NUM_STRINGS: usize = 3;
 
@@ -71,6 +72,7 @@ impl Engine for StringEngine {
         out: &mut [f32],
         aux: &mut [f32],
         _already_enveloped: &mut bool,
+        rng: &mut Rng,
     ) {
         let sustain = matches!(parameters.trigger, TriggerState::Unpatched);
         let trigger = matches!(parameters.trigger, TriggerState::RisingEdge);
@@ -102,6 +104,7 @@ impl Engine for StringEngine {
                 &mut self.temp_buffer_2,
                 out,
                 aux,
+                rng,
             );
         }
     }

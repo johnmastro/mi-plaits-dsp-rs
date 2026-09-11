@@ -19,6 +19,7 @@ use alloc::vec;
 
 use super::{Engine, EngineParameters, TriggerState, note_to_frequency};
 use crate::drums::hihat::{Hihat, NoiseType, VcaType};
+use crate::utils::random::Rng;
 
 #[derive(Debug, Clone)]
 pub struct HihatEngine {
@@ -53,6 +54,7 @@ impl Engine for HihatEngine {
         out: &mut [f32],
         aux: &mut [f32],
         _already_enveloped: &mut bool,
+        rng: &mut Rng,
     ) {
         let f0 = note_to_frequency(parameters.note, parameters.a0_normalized);
 
@@ -74,6 +76,7 @@ impl Engine for HihatEngine {
             VcaType::Swing,
             true,
             false,
+            rng,
         );
 
         self.hi_hat_2.render(
@@ -91,6 +94,7 @@ impl Engine for HihatEngine {
             VcaType::Linear,
             false,
             true,
+            rng,
         );
     }
 }

@@ -19,6 +19,7 @@ use super::{Engine, EngineParameters, note_to_frequency};
 use crate::oscillator::harmonic_oscillator::HarmonicOscillator;
 use crate::oscillator::sine_oscillator::sine;
 use crate::utils::one_pole;
+use crate::utils::random::Rng;
 
 const HARMONIC_BATCH_SIZE: usize = 12;
 const NUM_HARMONICS: usize = 36;
@@ -65,6 +66,7 @@ impl Engine for AdditiveEngine {
         out: &mut [f32],
         aux: &mut [f32],
         _already_enveloped: &mut bool,
+        _rng: &mut Rng,
     ) {
         let f0 = note_to_frequency(parameters.note, parameters.a0_normalized);
 

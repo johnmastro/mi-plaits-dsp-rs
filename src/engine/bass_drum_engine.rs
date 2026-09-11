@@ -20,6 +20,7 @@ use super::{Engine, EngineParameters, TriggerState, note_to_frequency};
 use crate::drums::analog_bass_drum::AnalogBassDrum;
 use crate::drums::synthetic_bass_drum::SyntheticBassDrum;
 use crate::fx::overdrive::Overdrive;
+use crate::utils::random::Rng;
 
 #[derive(Debug, Default, Clone)]
 pub struct BassDrumEngine {
@@ -49,6 +50,7 @@ impl Engine for BassDrumEngine {
         out: &mut [f32],
         aux: &mut [f32],
         _already_enveloped: &mut bool,
+        rng: &mut Rng,
     ) {
         let f0 = note_to_frequency(parameters.note, parameters.a0_normalized);
 
@@ -89,6 +91,7 @@ impl Engine for BassDrumEngine {
             f32::min(parameters.harmonics * 2.0, 1.0),
             f32::max(parameters.harmonics * 2.0 - 1.0, 0.0),
             aux,
+            rng,
         );
     }
 }

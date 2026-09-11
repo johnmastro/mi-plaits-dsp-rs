@@ -5,7 +5,7 @@
 use crate::oscillator::sine_oscillator::SineOscillator;
 use crate::utils::filter::{FilterMode, FrequencyApproximation, Svf};
 use crate::utils::parameter_interpolator::ParameterInterpolator;
-use crate::utils::random;
+use crate::utils::random::Rng;
 use crate::utils::units::semitones_to_ratio;
 use crate::utils::{one_pole, soft_clip};
 
@@ -67,6 +67,7 @@ impl AnalogSnareDrum {
         decay: f32,
         mut snappy: f32,
         out: &mut [f32],
+        rng: &mut Rng,
     ) {
         let decay_xt = decay * (1.0 + decay * (decay - 1.0));
         let q = 2000.0 * semitones_to_ratio(decay_xt * 84.0);
@@ -161,7 +162,7 @@ impl AnalogSnareDrum {
             shell = soft_clip(shell);
 
             // C56 / R194 / Q48 / C54 / R188 / D54
-            let mut noise = 2.0 * random::get_float() - 1.0;
+            let mut noise = 2.0 * rng.get_float() - 1.0;
             if noise < 0.0 {
                 noise = 0.0;
             }

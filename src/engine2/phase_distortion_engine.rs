@@ -18,6 +18,7 @@ use crate::oscillator::sine_oscillator::sine;
 use crate::oscillator::variable_shape_oscillator::VariableShapeOscillator;
 use crate::resources::fm::LUT_FM_FREQUENCY_QUANTIZER;
 use crate::utils::interpolate;
+use crate::utils::random::Rng;
 use crate::utils::units::semitones_to_ratio;
 
 #[derive(Debug, Clone)]
@@ -52,6 +53,7 @@ impl Engine for PhaseDistortionEngine {
         out: &mut [f32],
         aux: &mut [f32],
         _already_enveloped: &mut bool,
+        _rng: &mut Rng,
     ) {
         let f0 = 0.5 * note_to_frequency(parameters.note, parameters.a0_normalized);
         let modulator_f = f32::min(

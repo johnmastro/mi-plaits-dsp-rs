@@ -10,6 +10,7 @@ use super::lpc_speech_synth_phonemes::PHONEMES;
 use super::lpc_speech_synth_words::{NUM_WORD_BANKS, WORD_BANKS};
 use crate::utils::parameter_interpolator::ParameterInterpolator;
 use crate::utils::polyblep::{next_blep_sample, this_blep_sample};
+use crate::utils::random::Rng;
 use crate::utils::units::semitones_to_ratio;
 
 const MAX_WORDS: usize = 32;
@@ -82,6 +83,7 @@ impl LpcSpeechSynthController<'_> {
         gain: f32,
         excitation: &mut [f32],
         output: &mut [f32],
+        rng: &mut Rng,
     ) {
         let rate_ratio = semitones_to_ratio((formant_shift - 0.5) * 36.0);
         let rate = rate_ratio / 6.0;
@@ -179,7 +181,7 @@ impl LpcSpeechSynthController<'_> {
                 let (new_sample_0, new_sample_1) = new_sample.split_at_mut(1);
 
                 self.synth
-                    .render(prosody_amount, pitch_shift, new_sample_0, new_sample_1);
+                    .render(prosody_amount, pitch_shift, new_sample_0, new_sample_1, rng);
 
                 let discontinuity = [
                     new_sample[0] - self.sample[0],

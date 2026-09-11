@@ -19,7 +19,7 @@ block_size = 24
 target_feature_policy = "default (no target-cpu=native)"
 encoded_rustflags = ""
 onset_rms_threshold = "0.0001"
-recorded_at = "2026-09-09"
+recorded_at = "2026-09-10"
 
 [scenario.additive_control_clone.config]
 engine = 12
@@ -675,9 +675,9 @@ rms = 0.7795
 onset_block = 0
 
 [scenario.bass_drum_noise_clone.aux]
-hash = "blake3:7bde1d8e546532f345e71569a3a932874d3a74764e06f26a865f02448a227ae4"
+hash = "blake3:bde130ef8b9f6922d7ade593199673c5283d05eb0306dfa600122c9c8519f153"
 sample_count = 48000
-peak = 0.4903
+peak = 0.4888
 rms = 0.2876
 onset_block = 0
 
@@ -1325,14 +1325,14 @@ render_order = "original_then_clone"
 logical_continuation = "clone"
 
 [scenario.chiptune_random_arpeggiator_clone.out]
-hash = "blake3:cd746857b514bc6c8075e83c6b2727b72af3e18e3371a2b05cf95edc94a46349"
+hash = "blake3:bf05ce5a01c8f35f25b284b75eef839e9bced7016be1c4e53aaf8482c00afdd6"
 sample_count = 48000
 peak = 0.5
-rms = 0.4924
+rms = 0.4918
 onset_block = 0
 
 [scenario.chiptune_random_arpeggiator_clone.aux]
-hash = "blake3:874f84c29ec965dcdfeeb9e2ba5088059b68659ad3105670b6953e9dee7348d9"
+hash = "blake3:5e888251c46808af13d910ce4749a2ded0b19459efec798a15780415f406b84f"
 sample_count = 48000
 peak = 0.5
 rms = 0.3034
@@ -2235,17 +2235,17 @@ level_patched = false
 kind = "default"
 
 [scenario.coupling_noise_first_noise.out]
-hash = "blake3:023064563ea134f9d2c9154a8397d9fa3c1eaff1480729993d55b1647a1ff27e"
+hash = "blake3:8c3a37e8b7adf58560fcc8c92676519c8cdc3c5278c606f1ed943fdddec8868e"
 sample_count = 96000
-peak = 0.8924
-rms = 0.3365
+peak = 0.8968
+rms = 0.3337
 onset_block = 1
 
 [scenario.coupling_noise_first_noise.aux]
-hash = "blake3:afe3c527f86ba144efed69f52b1eb5f05966157ce0375a6a216f6c96d7aeac6a"
+hash = "blake3:3367a036289907a66399c109c71b026010cb7c266c3b105af754d7672a4b399d"
 sample_count = 96000
 peak = 0.8
-rms = 0.3566
+rms = 0.3559
 onset_block = 1
 
 [scenario.coupling_noise_first_particle.config]
@@ -2310,18 +2310,18 @@ level_patched = false
 kind = "default"
 
 [scenario.coupling_noise_first_particle.out]
-hash = "blake3:5d121c53823c687b73145906fd560888ffd0ee54ba0d8cfa626c7a4dbacc93f2"
+hash = "blake3:a5685984e97cd9a180689115b3d10f23e0a6dabb4d2af3587211d35b09e6a253"
 sample_count = 96000
-peak = 0.7995
-rms = 0.1851
-onset_block = 6
+peak = 0.6829
+rms = 0.1806
+onset_block = 7
 
 [scenario.coupling_noise_first_particle.aux]
-hash = "blake3:5dc823bba27faf907e604284137928f8e19b5a660bbc4bd0eedb3e528820232b"
+hash = "blake3:5dfb10af95cb0f9d594a48df3fea0eb61ca787cc404bcf4f2884170850fdc544"
 sample_count = 96000
 peak = 1.812
 rms = 0.0443
-onset_block = 5
+onset_block = 7
 
 [scenario.coupling_particle_first_noise.config]
 engine = 17
@@ -2385,17 +2385,17 @@ level_patched = false
 kind = "default"
 
 [scenario.coupling_particle_first_noise.out]
-hash = "blake3:bd63584a4124aba5e3123e7d7d9007b997d024a7ab0024f101b8bdb96317d3f1"
+hash = "blake3:8c3a37e8b7adf58560fcc8c92676519c8cdc3c5278c606f1ed943fdddec8868e"
 sample_count = 96000
-peak = 0.8795
-rms = 0.3187
+peak = 0.8968
+rms = 0.3337
 onset_block = 1
 
 [scenario.coupling_particle_first_noise.aux]
-hash = "blake3:1acb0ed2a0e1efcc055503c5b7f51890ca5c475e65c3023d6fe186cacb30cd41"
+hash = "blake3:3367a036289907a66399c109c71b026010cb7c266c3b105af754d7672a4b399d"
 sample_count = 96000
 peak = 0.8
-rms = 0.3222
+rms = 0.3559
 onset_block = 1
 
 [scenario.coupling_particle_first_particle.config]
@@ -2460,18 +2460,18 @@ level_patched = false
 kind = "default"
 
 [scenario.coupling_particle_first_particle.out]
-hash = "blake3:ed71dcf7d1cae6c85d050f68499dad1ff1d692dda9a665cf377a55827cd8ec3f"
+hash = "blake3:a5685984e97cd9a180689115b3d10f23e0a6dabb4d2af3587211d35b09e6a253"
 sample_count = 96000
-peak = 0.6867
-rms = 0.1773
-onset_block = 6
+peak = 0.6829
+rms = 0.1806
+onset_block = 7
 
 [scenario.coupling_particle_first_particle.aux]
-hash = "blake3:c1109ce045e7dd606263bedd968e8e3ec410b04eaa248a4973a34b0feac4f56d"
+hash = "blake3:5dfb10af95cb0f9d594a48df3fea0eb61ca787cc404bcf4f2884170850fdc544"
 sample_count = 96000
 peak = 1.812
-rms = 0.0439
-onset_block = 6
+rms = 0.0443
+onset_block = 7
 
 [scenario.fm_harmonics_ramp.config]
 engine = 10
@@ -3279,17 +3279,17 @@ render_order = "original_then_clone"
 logical_continuation = "clone"
 
 [scenario.hihat_clocked_noise_clone.out]
-hash = "blake3:177a84c4f7b72d367afd3ad266491c7160364fee0aa48fc90d97445c4397869a"
+hash = "blake3:3ded98a6b1f46535d1e97f07827eeab4936f0ccaf002d8f67187d8811aff2288"
 sample_count = 48000
-peak = 0.2282
-rms = 0.0293
+peak = 0.227
+rms = 0.0288
 onset_block = 0
 
 [scenario.hihat_clocked_noise_clone.aux]
-hash = "blake3:38278da761d6d94344affe3019e3673d52962abd14ef7e11a653348b22edd1eb"
+hash = "blake3:bee6bf0e831c90e6ae979de94b89a3c368d13a0944c2f9b909b36423572e8bdf"
 sample_count = 48000
-peak = 0.3161
-rms = 0.0316
+peak = 0.3189
+rms = 0.0315
 onset_block = 0
 
 [scenario.hihat_clocked_noise_original.config]
@@ -3846,17 +3846,17 @@ render_order = "original_then_clone"
 logical_continuation = "clone"
 
 [scenario.modal_dust_clone.out]
-hash = "blake3:1b7fe753255d255dac3298ef3384ea059822e537a1568a150ae68a2dc17dd4cf"
+hash = "blake3:61c62c5f0c6c2f8f26e4854895c533215a302b56b2ec20858c445f1ca831b6d7"
 sample_count = 48000
-peak = 1.1437
-rms = 0.3025
+peak = 0.9798
+rms = 0.2947
 onset_block = 0
 
 [scenario.modal_dust_clone.aux]
-hash = "blake3:b882e117174ff4e3adb872af3e02a5ab9f03b9eff0cb4be9b69ec5d002467692"
+hash = "blake3:10a6c12f3a0cc9d5138f7c00789642af2eef76d288ddb9bd43610aaef3325e56"
 sample_count = 48000
-peak = 0.9078
-rms = 0.3877
+peak = 0.9972
+rms = 0.3867
 onset_block = 0
 
 [scenario.modal_dust_original.config]
@@ -4413,17 +4413,17 @@ render_order = "original_then_clone"
 logical_continuation = "clone"
 
 [scenario.noise_clocked_clone.out]
-hash = "blake3:42e791658a4531f2f59827a3ec49d8833d9a56b67b86a04295ed7c8ae207d0ca"
+hash = "blake3:b46b4cf441005649d1c06601960cd9a7b0aa828d5c61f00c39a6e78cb537e09c"
 sample_count = 48000
-peak = 0.8297
-rms = 0.3069
+peak = 0.8968
+rms = 0.3254
 onset_block = 0
 
 [scenario.noise_clocked_clone.aux]
-hash = "blake3:f441a3f1010be228517c2fd3dab46e5390002b7fc2ba98897ac37126857e6793"
+hash = "blake3:9de9c894c5ea3ae4b9fbb02f8b4d0e4b956a8d8b9791e4a48c3004914c737544"
 sample_count = 48000
-peak = 0.7992
-rms = 0.3161
+peak = 0.8
+rms = 0.3389
 onset_block = 0
 
 [scenario.noise_clocked_original.config]
@@ -5126,18 +5126,18 @@ render_order = "original_then_clone"
 logical_continuation = "clone"
 
 [scenario.particle_dust_clone.out]
-hash = "blake3:00eeacdcd342855ee301e1a3a8eafbd907cd158cac7e859a892a87ab88636b0b"
+hash = "blake3:c6c2b0dad224c71716969ce6cd25482a665fcd0873fa248227f526adefc7494f"
 sample_count = 48000
-peak = 0.7999
-rms = 0.1831
+peak = 0.6281
+rms = 0.1887
 onset_block = 0
 
 [scenario.particle_dust_clone.aux]
-hash = "blake3:487b5cdd65d4425c3d2993ff6dba5a833dd218d83c50b68f78b4ec58de9f8c82"
+hash = "blake3:2f72e3ae4f8b75092fd8ab2b5d1fef623e9df3c4e53bf6081942b1ad69fd34a5"
 sample_count = 48000
-peak = 0.9997
-rms = 0.043
-onset_block = 11
+peak = 1.812
+rms = 0.0438
+onset_block = 6
 
 [scenario.particle_dust_original.config]
 engine = 18
@@ -6350,17 +6350,17 @@ render_order = "original_then_clone"
 logical_continuation = "clone"
 
 [scenario.six_op_bank_a_random_lfo_clone.out]
-hash = "blake3:cb53d8efcaf2e2bbf76c345f987d01ca452802b60f5e308d8217f89bcf22170b"
+hash = "blake3:d5122b11887e71ff0679fe08b5e55aba7303e814e2b96ce55c45ae10c4a72c20"
 sample_count = 48000
 peak = 0.4501
-rms = 0.2139
+rms = 0.2146
 onset_block = 0
 
 [scenario.six_op_bank_a_random_lfo_clone.aux]
-hash = "blake3:cb53d8efcaf2e2bbf76c345f987d01ca452802b60f5e308d8217f89bcf22170b"
+hash = "blake3:d5122b11887e71ff0679fe08b5e55aba7303e814e2b96ce55c45ae10c4a72c20"
 sample_count = 48000
 peak = 0.4501
-rms = 0.2139
+rms = 0.2146
 onset_block = 0
 
 [scenario.six_op_bank_a_random_lfo_original.config]
@@ -7097,17 +7097,17 @@ render_order = "original_then_clone"
 logical_continuation = "clone"
 
 [scenario.six_op_bank_b_random_lfo_clone.out]
-hash = "blake3:bb4b12ad3980f621df5aff9469c37a72e583cac24de1cf047405d4f230bad5db"
+hash = "blake3:cbcd94fa046716651c907204f36e1665baf3f0a425785ad5195028c24ac68a48"
 sample_count = 48000
-peak = 0.8671
-rms = 0.3868
+peak = 0.8877
+rms = 0.3689
 onset_block = 0
 
 [scenario.six_op_bank_b_random_lfo_clone.aux]
-hash = "blake3:bb4b12ad3980f621df5aff9469c37a72e583cac24de1cf047405d4f230bad5db"
+hash = "blake3:cbcd94fa046716651c907204f36e1665baf3f0a425785ad5195028c24ac68a48"
 sample_count = 48000
-peak = 0.8671
-rms = 0.3868
+peak = 0.8877
+rms = 0.3689
 onset_block = 0
 
 [scenario.six_op_bank_b_random_lfo_original.config]
@@ -7844,17 +7844,17 @@ render_order = "original_then_clone"
 logical_continuation = "clone"
 
 [scenario.six_op_bank_c_random_lfo_clone.out]
-hash = "blake3:d596cacc3a0027b8e77a4cdb45f8f27ecdc5a52f3cdcea7a2cb27c3b6ccc2eec"
+hash = "blake3:e15afe98edd6e70484236dd0d252f52a045286fa56d3bde64031c159f4ba1b24"
 sample_count = 48000
 peak = 0.9957
-rms = 0.5754
+rms = 0.5524
 onset_block = 0
 
 [scenario.six_op_bank_c_random_lfo_clone.aux]
-hash = "blake3:d596cacc3a0027b8e77a4cdb45f8f27ecdc5a52f3cdcea7a2cb27c3b6ccc2eec"
+hash = "blake3:e15afe98edd6e70484236dd0d252f52a045286fa56d3bde64031c159f4ba1b24"
 sample_count = 48000
 peak = 0.9957
-rms = 0.5754
+rms = 0.5524
 onset_block = 0
 
 [scenario.six_op_bank_c_random_lfo_original.config]
@@ -8447,17 +8447,17 @@ render_order = "original_then_clone"
 logical_continuation = "clone"
 
 [scenario.snare_drum_noise_clone.out]
-hash = "blake3:43e627b597f2bf826c65d1b9d5baeefa1c3f5fd2194b5dfb593f98a4781a57b7"
+hash = "blake3:ed78424cbc34e0d348c532ea09c7906f1e1ccc146cb60ca3b3af7cbff581ae99"
 sample_count = 48000
-peak = 0.3881
-rms = 0.0926
+peak = 0.3774
+rms = 0.0913
 onset_block = 0
 
 [scenario.snare_drum_noise_clone.aux]
-hash = "blake3:bdffb4503fa911263a307f709a66cc49b896475bc2d495cec3933d72be380d6a"
+hash = "blake3:edb626a3cf9695aa020721361dfea490e1e83e0e975ff7df3af68b9d2adc8830"
 sample_count = 48000
-peak = 0.4114
-rms = 0.1114
+peak = 0.4351
+rms = 0.1128
 onset_block = 0
 
 [scenario.snare_drum_noise_original.config]
@@ -8972,14 +8972,14 @@ render_order = "original_then_clone"
 logical_continuation = "clone"
 
 [scenario.speech_lpc_noise_clone.out]
-hash = "blake3:9516083518315e329e6032eccb84d98fc1a312c4ac811a6d3be14dda8f505875"
+hash = "blake3:1b5395225b1184865ad48dec6131621fb629eacf172d98d0b9b969d87045ce77"
 sample_count = 48000
-peak = 0.3173
-rms = 0.0753
+peak = 0.296
+rms = 0.079
 onset_block = 0
 
 [scenario.speech_lpc_noise_clone.aux]
-hash = "blake3:b17758d923db2c0752d87260dde4a396ac709ea6a7d05f041ad2a56e8b6c10d5"
+hash = "blake3:7709f5f7219fae6539782710ab60d759623a6d3e56c6dc895386faf723d4405a"
 sample_count = 48000
 peak = 0.0141
 rms = 0.0135
@@ -9453,17 +9453,17 @@ render_order = "original_then_clone"
 logical_continuation = "clone"
 
 [scenario.string_dust_clone.out]
-hash = "blake3:f0c9b4a74843252656791b38284dc231633a6b85ce005ba2ea28be01d2ecb95f"
+hash = "blake3:bb80fb5a792a75b9ec585c22177ac59445ac9168451ada9a825d4d3774d7c768"
 sample_count = 48000
-peak = 0.9715
-rms = 0.3032
+peak = 0.9883
+rms = 0.2992
 onset_block = 0
 
 [scenario.string_dust_clone.aux]
-hash = "blake3:fed74e68f0981c74be41cbb6dd0cb3fc27219a68996569938ab8df8a91473be1"
+hash = "blake3:8ffa35738884bf8a1fcc2ac131c6cb1bab6682e337329cd749ef34447c93146e"
 sample_count = 48000
-peak = 2.9854
-rms = 0.5855
+peak = 3.3447
+rms = 0.5696
 onset_block = 0
 
 [scenario.string_dust_original.config]
@@ -10405,17 +10405,17 @@ render_order = "original_then_clone"
 logical_continuation = "clone"
 
 [scenario.swarm_grains_clone.out]
-hash = "blake3:58af3617e4edfa8eb9ec7e8d57a98876d993e52d15d0ef844f305c71b14b50e4"
+hash = "blake3:f88c55ec0b17df3520275698b3db5c2fc059ba8d437f9d08c93941e0d32c6301"
 sample_count = 48000
-peak = 0.8859
-rms = 0.2636
+peak = 0.8972
+rms = 0.2653
 onset_block = 0
 
 [scenario.swarm_grains_clone.aux]
-hash = "blake3:e6636e82312af1341452ec38c88dc83f1ed5bb9d6d8dbf4f9ffed52c92295481"
+hash = "blake3:3b10968920c14610ff0e88e9fa59d8471b543784d503fdce5fa020b869bf3332"
 sample_count = 48000
-peak = 0.7667
-rms = 0.2395
+peak = 0.8897
+rms = 0.242
 onset_block = 0
 
 [scenario.swarm_grains_original.config]

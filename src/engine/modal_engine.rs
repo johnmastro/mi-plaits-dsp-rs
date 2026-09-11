@@ -19,6 +19,7 @@ use alloc::vec;
 use super::{Engine, EngineParameters, TriggerState, note_to_frequency};
 use crate::physical_modelling::modal_voice::ModalVoice;
 use crate::utils::one_pole;
+use crate::utils::random::Rng;
 
 #[derive(Debug, Clone)]
 pub struct ModalEngine {
@@ -57,6 +58,7 @@ impl Engine for ModalEngine {
         out: &mut [f32],
         aux: &mut [f32],
         _already_enveloped: &mut bool,
+        rng: &mut Rng,
     ) {
         out.fill(0.0);
         aux.fill(0.0);
@@ -78,6 +80,7 @@ impl Engine for ModalEngine {
             &mut self.temp_buffer_2,
             out,
             aux,
+            rng,
         );
     }
 }

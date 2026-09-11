@@ -28,6 +28,7 @@ use crate::speech::lpc_speech_synth_words::NUM_WORD_BANKS;
 use crate::speech::naive_speech_synth::NaiveSpeechSynth;
 use crate::speech::sam_speech_synth::SamSpeechSynth;
 use crate::utils::hysteresis_quantizer::HysteresisQuantizer2;
+use crate::utils::random::Rng;
 
 #[derive(Debug, Clone)]
 pub struct SpeechEngine<'a> {
@@ -81,6 +82,7 @@ impl Engine for SpeechEngine<'_> {
         out: &mut [f32],
         aux: &mut [f32],
         already_enveloped: &mut bool,
+        rng: &mut Rng,
     ) {
         let f0 = note_to_frequency(parameters.note, parameters.a0_normalized);
 
@@ -118,6 +120,7 @@ impl Engine for SpeechEngine<'_> {
                     1.0,
                     aux,
                     out,
+                    rng,
                 );
                 blend = 2.0 - blend;
             }
@@ -162,6 +165,7 @@ impl Engine for SpeechEngine<'_> {
                 },
                 aux,
                 out,
+                rng,
             );
         }
     }
