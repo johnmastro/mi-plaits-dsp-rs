@@ -91,8 +91,8 @@ impl Mode {
     }
 }
 
-fn repeat_render_required(mode: Mode, canonical_target: bool) -> bool {
-    mode == Mode::Record || !canonical_target
+fn repeat_render_required(mode: Mode) -> bool {
+    mode == Mode::Record
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -127,7 +127,7 @@ impl Metadata {
             hash_algorithm: HASH_ALGORITHM.to_owned(),
             upstream_revision: UPSTREAM_REVISION.to_owned(),
             rustc_verbose: command_output("rustc", &["--version", "--verbose"])?,
-            target: canonical_target().to_owned(),
+            target: env!("GOLDEN_TARGET").to_owned(),
             operating_system: operating_system_description(),
             architecture: std::env::consts::ARCH.to_owned(),
             recording_profile: profile_name().to_owned(),
@@ -162,19 +162,6 @@ impl Metadata {
         );
         compare_field(
             &mut errors,
-            "rustc_verbose",
-            &self.rustc_verbose,
-            &actual.rustc_verbose,
-        );
-        compare_field(&mut errors, "target", &self.target, &actual.target);
-        compare_field(
-            &mut errors,
-            "architecture",
-            &self.architecture,
-            &actual.architecture,
-        );
-        compare_field(
-            &mut errors,
             "sample_rate",
             self.sample_rate,
             actual.sample_rate,
@@ -200,7 +187,11 @@ impl Metadata {
         errors
     }
 
-    fn preserve_nonsemantic_fields(&mut self, previous: &Self) {
+    fn preserve_recording_provenance(&mut self, previous: &Self) {
+        self.rustc_verbose.clone_from(&previous.rustc_verbose);
+        self.target.clone_from(&previous.target);
+        self.operating_system.clone_from(&previous.operating_system);
+        self.architecture.clone_from(&previous.architecture);
         self.recorded_at.clone_from(&previous.recorded_at);
         self.recording_profile
             .clone_from(&previous.recording_profile);
@@ -1100,7 +1091,7 @@ fn ordinary_scenario_configs() -> Result<BTreeMap<String, ScenarioConfig>, Strin
 }
 
 fn render_all_scenarios(mode: Mode) -> Result<BTreeMap<String, RecordedScenario>, Box<dyn Error>> {
-    let verify_repeatability = repeat_render_required(mode, is_canonical_target());
+    let verify_repeatability = repeat_render_required(mode);
     let mut recorded =
         render_config_scenarios(ordinary_scenario_configs()?, mode, verify_repeatability)?;
     validate_random_seed_sensitivity(&recorded)?;
@@ -1928,29 +1919,13 @@ fn current_manifest(
 
     if let Some(previous) = previous
         && previous.scenario == manifest.scenario
-        && metadata_only_profile_or_date_changed(&previous.metadata, &manifest.metadata)
     {
         manifest
             .metadata
-            .preserve_nonsemantic_fields(&previous.metadata);
+            .preserve_recording_provenance(&previous.metadata);
     }
 
     Ok(manifest)
-}
-
-fn metadata_only_profile_or_date_changed(previous: &Metadata, actual: &Metadata) -> bool {
-    previous.schema_version == actual.schema_version
-        && previous.hash_algorithm == actual.hash_algorithm
-        && previous.upstream_revision == actual.upstream_revision
-        && previous.rustc_verbose == actual.rustc_verbose
-        && previous.target == actual.target
-        && previous.operating_system == actual.operating_system
-        && previous.architecture == actual.architecture
-        && previous.sample_rate == actual.sample_rate
-        && previous.block_size == actual.block_size
-        && previous.target_feature_policy == actual.target_feature_policy
-        && previous.encoded_rustflags == actual.encoded_rustflags
-        && previous.onset_rms_threshold == actual.onset_rms_threshold
 }
 
 fn command_output(program: &str, arguments: &[&str]) -> Result<String, Box<dyn Error>> {
@@ -1970,18 +1945,6 @@ fn operating_system_description() -> String {
         }
     }
     std::env::consts::OS.to_owned()
-}
-
-fn canonical_target() -> &'static str {
-    if cfg!(all(target_arch = "aarch64", target_os = "macos")) {
-        "aarch64-apple-darwin"
-    } else {
-        "noncanonical"
-    }
-}
-
-fn is_canonical_target() -> bool {
-    canonical_target() == "aarch64-apple-darwin"
 }
 
 fn profile_name() -> &'static str {
@@ -2005,7 +1968,7 @@ where
         return Ok(());
     }
 
-    let verify_repeatability = repeat_render_required(mode, is_canonical_target());
+    let verify_repeatability = repeat_render_required(mode);
     let scenarios = render(mode, verify_repeatability)?;
     if scenarios.len() != expected_scenarios {
         return Err(format!(
@@ -2013,15 +1976,6 @@ where
             scenarios.len()
         )
         .into());
-    }
-
-    if !is_canonical_target() {
-        eprintln!(
-            "verified same-seed repeatability for {} {group_name} scenarios; skipping exact golden comparison on noncanonical target {:?}",
-            scenarios.len(),
-            canonical_target()
-        );
-        return Ok(());
     }
 
     compare_scenario_group(check_manifest()?, &scenarios)?;
@@ -2049,10 +2003,6 @@ fn golden_record_or_wav_all() -> Result<(), Box<dyn Error>> {
         return Ok(());
     }
 
-    if !is_canonical_target() && mode == Mode::Record {
-        return Err("refusing to record goldens on a noncanonical target".into());
-    }
-
     let path = manifest_path();
     let previous = if path.try_exists()? {
         Some(read_manifest(&path)?)
@@ -2060,15 +2010,6 @@ fn golden_record_or_wav_all() -> Result<(), Box<dyn Error>> {
         None
     };
     let scenarios = render_all_scenarios(mode)?;
-
-    if !is_canonical_target() {
-        eprintln!(
-            "verified same-seed repeatability for {} scenarios; skipping exact golden comparison on noncanonical target {:?}",
-            scenarios.len(),
-            canonical_target()
-        );
-        return Ok(());
-    }
 
     let actual = current_manifest(previous.as_ref(), scenarios)?;
 
@@ -2104,13 +2045,11 @@ fn golden_manifest_inventory() -> Result<(), Box<dyn Error>> {
         .collect::<BTreeSet<_>>();
     let mut failures = Vec::new();
 
-    if is_canonical_target() {
-        failures.extend(
-            manifest
-                .metadata
-                .compatibility_errors(&Metadata::current()?),
-        );
-    }
+    failures.extend(
+        manifest
+            .metadata
+            .compatibility_errors(&Metadata::current()?),
+    );
 
     for name in names {
         match (manifest.scenario.get(&name), configs.get(&name)) {
@@ -2262,12 +2201,9 @@ fn harness_primitives_are_deterministic() {
     );
     assert_eq!(Mode::from_value(Some(OsStr::new("wav"))), Ok(Mode::Wav));
     assert!(Mode::from_value(Some(OsStr::new("invalid"))).is_err());
-    assert!(!repeat_render_required(Mode::Check, true));
-    assert!(!repeat_render_required(Mode::Wav, true));
-    assert!(repeat_render_required(Mode::Record, true));
-    assert!(repeat_render_required(Mode::Check, false));
-    assert!(repeat_render_required(Mode::Record, false));
-    assert!(repeat_render_required(Mode::Wav, false));
+    assert!(!repeat_render_required(Mode::Check));
+    assert!(!repeat_render_required(Mode::Wav));
+    assert!(repeat_render_required(Mode::Record));
 
     let samples = [0.0, -0.0, 1.0, -1.0, 0.25, -0.25];
     let first = ChannelFingerprint::from_samples(&samples).unwrap();
@@ -2343,6 +2279,29 @@ fn scenario_manifest_round_trips_and_rejects_duplicate_names() {
     let serialized = toml::to_string_pretty(&manifest).unwrap();
     let parsed: Manifest = toml::from_str(&serialized).unwrap();
     assert_eq!(parsed, manifest);
+}
+
+#[test]
+fn unchanged_manifest_preserves_recording_provenance() {
+    let scenarios = BTreeMap::new();
+    let mut previous = current_manifest(None, scenarios.clone()).unwrap();
+    previous.metadata.rustc_verbose = "recording rustc".to_owned();
+    previous.metadata.target = "recording-target".to_owned();
+    previous.metadata.operating_system = "recording OS".to_owned();
+    previous.metadata.architecture = "recording-architecture".to_owned();
+    previous.metadata.recording_profile = "recording-profile".to_owned();
+    previous.metadata.recorded_at = "recording-date".to_owned();
+    previous.metadata.sample_rate = 1;
+
+    let actual = current_manifest(Some(&previous), scenarios).unwrap();
+
+    assert_eq!(actual.metadata.rustc_verbose, "recording rustc");
+    assert_eq!(actual.metadata.target, "recording-target");
+    assert_eq!(actual.metadata.operating_system, "recording OS");
+    assert_eq!(actual.metadata.architecture, "recording-architecture");
+    assert_eq!(actual.metadata.recording_profile, "recording-profile");
+    assert_eq!(actual.metadata.recorded_at, "recording-date");
+    assert_eq!(actual.metadata.sample_rate, SAMPLE_RATE);
 }
 
 #[test]
