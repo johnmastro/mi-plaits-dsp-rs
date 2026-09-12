@@ -23,6 +23,10 @@ jobs:
             os: ubuntu-24.04
           - name: Linux aarch64
             os: ubuntu-24.04-arm
+          - name: macOS aarch64
+            os: macos-26
+          - name: Windows x86_64
+            os: windows-2025
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
 
