@@ -7,7 +7,7 @@ use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Mutex, MutexGuard, OnceLock};
 
 use blake3::Hasher;
 use hound::{SampleFormat, WavSpec, WavWriter};
@@ -65,6 +65,7 @@ const ENGINE_NAMES: [&str; NUM_ENGINES] = [
 ];
 
 static RNG_LOCK: Mutex<()> = Mutex::new(());
+static CHECK_MANIFEST: OnceLock<Result<Manifest, String>> = OnceLock::new();
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Mode {
@@ -1054,18 +1055,11 @@ fn apply_gate(
     Ok(())
 }
 
-fn render_all_scenarios(mode: Mode) -> Result<BTreeMap<String, RecordedScenario>, Box<dyn Error>> {
-    let verify_repeatability = repeat_render_required(mode, is_canonical_target());
-    let mut configs = core_scenario_configs()?;
-    for (name, config) in level_cv_trigger_configs()? {
-        insert_scenario(&mut configs, name, config)?;
-    }
-    for (name, config) in random_scenario_configs()? {
-        insert_scenario(&mut configs, name, config)?;
-    }
-    for (name, config) in six_op_depth_configs()? {
-        insert_scenario(&mut configs, name, config)?;
-    }
+fn render_config_scenarios(
+    configs: BTreeMap<String, ScenarioConfig>,
+    mode: Mode,
+    verify_repeatability: bool,
+) -> Result<BTreeMap<String, RecordedScenario>, Box<dyn Error>> {
     let mut recorded = BTreeMap::new();
 
     for (name, config) in configs {
@@ -1087,6 +1081,28 @@ fn render_all_scenarios(mode: Mode) -> Result<BTreeMap<String, RecordedScenario>
         }
         insert_scenario(&mut recorded, name, first.recorded)?;
     }
+
+    Ok(recorded)
+}
+
+fn ordinary_scenario_configs() -> Result<BTreeMap<String, ScenarioConfig>, String> {
+    let mut configs = core_scenario_configs()?;
+    for (name, config) in level_cv_trigger_configs()? {
+        insert_scenario(&mut configs, name, config)?;
+    }
+    for (name, config) in random_scenario_configs()? {
+        insert_scenario(&mut configs, name, config)?;
+    }
+    for (name, config) in six_op_depth_configs()? {
+        insert_scenario(&mut configs, name, config)?;
+    }
+    Ok(configs)
+}
+
+fn render_all_scenarios(mode: Mode) -> Result<BTreeMap<String, RecordedScenario>, Box<dyn Error>> {
+    let verify_repeatability = repeat_render_required(mode, is_canonical_target());
+    let mut recorded =
+        render_config_scenarios(ordinary_scenario_configs()?, mode, verify_repeatability)?;
     validate_random_seed_sensitivity(&recorded)?;
     validate_level_cv_gate_sensitivity(&recorded)?;
     render_and_insert_coupling_scenarios(&mut recorded, mode, verify_repeatability)?;
@@ -1681,6 +1697,71 @@ fn render_and_insert_clone_continuations(
     Ok(())
 }
 
+fn manifest_scenario_configs() -> Result<BTreeMap<String, ScenarioConfig>, String> {
+    let mut configs = ordinary_scenario_configs()?;
+
+    let (noise, particle) = coupling_voice_configs()?;
+    for (name, config) in [
+        (
+            "coupling_noise_first_noise",
+            coupled_record_config(
+                &noise,
+                &particle,
+                CouplingOrder::NoiseThenParticle,
+                CoupledVoice::Noise,
+            ),
+        ),
+        (
+            "coupling_noise_first_particle",
+            coupled_record_config(
+                &particle,
+                &noise,
+                CouplingOrder::NoiseThenParticle,
+                CoupledVoice::Particle,
+            ),
+        ),
+        (
+            "coupling_particle_first_noise",
+            coupled_record_config(
+                &noise,
+                &particle,
+                CouplingOrder::ParticleThenNoise,
+                CoupledVoice::Noise,
+            ),
+        ),
+        (
+            "coupling_particle_first_particle",
+            coupled_record_config(
+                &particle,
+                &noise,
+                CouplingOrder::ParticleThenNoise,
+                CoupledVoice::Particle,
+            ),
+        ),
+    ] {
+        insert_scenario(&mut configs, name, config)?;
+    }
+
+    for (period_blocks, name) in ENGINE_SWITCH_PERIODS {
+        insert_scenario(&mut configs, name, engine_switch_config(period_blocks)?)?;
+    }
+
+    for (case_name, config, _) in clone_case_configs() {
+        for (role, continuation) in [
+            ("original", CloneContinuation::Original),
+            ("clone", CloneContinuation::Clone),
+        ] {
+            insert_scenario(
+                &mut configs,
+                format!("{case_name}_{role}"),
+                clone_record_config(&config, continuation),
+            )?;
+        }
+    }
+
+    Ok(configs)
+}
+
 fn compare_manifests(expected: &Manifest, actual: &Manifest) -> Result<(), String> {
     let mut failures = expected.metadata.compatibility_errors(&actual.metadata);
     let names = expected
@@ -1700,6 +1781,30 @@ fn compare_manifests(expected: &Manifest, actual: &Manifest) -> Result<(), Strin
             (Some(_), None) => failures.push(format!("scenario {name:?} is missing")),
             (None, Some(_)) => failures.push(format!("scenario {name:?} is not in the manifest")),
             (None, None) => unreachable!(),
+        }
+    }
+
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(failures.join("\n"))
+    }
+}
+
+fn compare_scenario_group(
+    expected: &Manifest,
+    actual: &BTreeMap<String, RecordedScenario>,
+) -> Result<(), String> {
+    let mut failures = Vec::new();
+
+    for (name, actual) in actual {
+        match expected.scenario.get(name) {
+            Some(expected) if expected == actual => {}
+            Some(expected) => {
+                failures.push(format!("scenario {name:?} differs"));
+                append_scenario_difference(&mut failures, expected, actual);
+            }
+            None => failures.push(format!("scenario {name:?} is not in the manifest")),
         }
     }
 
@@ -1753,6 +1858,21 @@ fn manifest_path() -> PathBuf {
 fn read_manifest(path: &Path) -> Result<Manifest, Box<dyn Error>> {
     let contents = fs::read_to_string(path)?;
     Ok(toml::from_str(&contents)?)
+}
+
+fn check_manifest() -> Result<&'static Manifest, Box<dyn Error>> {
+    match CHECK_MANIFEST.get_or_init(|| {
+        let path = manifest_path();
+        read_manifest(&path).map_err(|error| {
+            format!(
+                "failed to read golden manifest at {}: {error}",
+                path.display()
+            )
+        })
+    }) {
+        Ok(manifest) => Ok(manifest),
+        Err(error) => Err(error.clone().into()),
+    }
 }
 
 fn write_manifest_atomically(path: &Path, manifest: &Manifest) -> Result<(), Box<dyn Error>> {
@@ -1872,9 +1992,62 @@ fn profile_name() -> &'static str {
     }
 }
 
-#[test]
-fn golden_all() -> Result<(), Box<dyn Error>> {
+fn check_golden_group<F>(
+    group_name: &str,
+    expected_scenarios: usize,
+    render: F,
+) -> Result<(), Box<dyn Error>>
+where
+    F: FnOnce(Mode, bool) -> Result<BTreeMap<String, RecordedScenario>, Box<dyn Error>>,
+{
     let mode = Mode::from_environment()?;
+    if mode != Mode::Check {
+        return Ok(());
+    }
+
+    let verify_repeatability = repeat_render_required(mode, is_canonical_target());
+    let scenarios = render(mode, verify_repeatability)?;
+    if scenarios.len() != expected_scenarios {
+        return Err(format!(
+            "expected {expected_scenarios} {group_name} scenarios, rendered {}",
+            scenarios.len()
+        )
+        .into());
+    }
+
+    if !is_canonical_target() {
+        eprintln!(
+            "verified same-seed repeatability for {} {group_name} scenarios; skipping exact golden comparison on noncanonical target {:?}",
+            scenarios.len(),
+            canonical_target()
+        );
+        return Ok(());
+    }
+
+    compare_scenario_group(check_manifest()?, &scenarios)?;
+    Ok(())
+}
+
+fn check_config_group(
+    group_name: &str,
+    configs: BTreeMap<String, ScenarioConfig>,
+) -> Result<(), Box<dyn Error>> {
+    let expected_scenarios = configs.len();
+    check_golden_group(
+        group_name,
+        expected_scenarios,
+        move |mode, verify_repeatability| {
+            render_config_scenarios(configs, mode, verify_repeatability)
+        },
+    )
+}
+
+#[test]
+fn golden_record_or_wav_all() -> Result<(), Box<dyn Error>> {
+    let mode = Mode::from_environment()?;
+    if mode == Mode::Check {
+        return Ok(());
+    }
 
     if !is_canonical_target() && mode == Mode::Record {
         return Err("refusing to record goldens on a noncanonical target".into());
@@ -1913,6 +2086,170 @@ fn golden_all() -> Result<(), Box<dyn Error>> {
     }
 
     Ok(())
+}
+
+#[test]
+fn golden_manifest_inventory() -> Result<(), Box<dyn Error>> {
+    if Mode::from_environment()? != Mode::Check {
+        return Ok(());
+    }
+
+    let manifest = check_manifest()?;
+    let configs = manifest_scenario_configs()?;
+    let names = manifest
+        .scenario
+        .keys()
+        .chain(configs.keys())
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    let mut failures = Vec::new();
+
+    if is_canonical_target() {
+        failures.extend(
+            manifest
+                .metadata
+                .compatibility_errors(&Metadata::current()?),
+        );
+    }
+
+    for name in names {
+        match (manifest.scenario.get(&name), configs.get(&name)) {
+            (Some(recorded), Some(config)) if recorded.config == *config => {}
+            (Some(recorded), Some(config)) => {
+                failures.push(format!("scenario {name:?} has a stale config"));
+                failures.push(format!("  manifest config: {:#?}", recorded.config));
+                failures.push(format!("   current config: {config:#?}"));
+            }
+            (Some(_), None) => failures.push(format!(
+                "scenario {name:?} is in the manifest but is no longer configured"
+            )),
+            (None, Some(_)) => failures.push(format!(
+                "configured scenario {name:?} is missing from the manifest"
+            )),
+            (None, None) => unreachable!(),
+        }
+    }
+
+    if configs.len() != 291 {
+        failures.push(format!(
+            "expected 291 configured scenarios, found {}",
+            configs.len()
+        ));
+    }
+
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(failures.join("\n").into())
+    }
+}
+
+macro_rules! golden_core_engine_test {
+    ($test_name:ident, $engine:expr) => {
+        #[test]
+        fn $test_name() -> Result<(), Box<dyn Error>> {
+            let configs = core_scenario_configs()?
+                .into_iter()
+                .filter(|(_, config)| config.engine == $engine)
+                .collect::<BTreeMap<_, _>>();
+            if configs.len() != 9 {
+                return Err(format!(
+                    "expected 9 core scenarios for engine {}, found {}",
+                    $engine,
+                    configs.len()
+                )
+                .into());
+            }
+            check_config_group(ENGINE_NAMES[$engine], configs)
+        }
+    };
+}
+
+golden_core_engine_test!(golden_core_virtual_analog_vcf, 0);
+golden_core_engine_test!(golden_core_phase_distortion, 1);
+golden_core_engine_test!(golden_core_six_op_bank_a, 2);
+golden_core_engine_test!(golden_core_six_op_bank_b, 3);
+golden_core_engine_test!(golden_core_six_op_bank_c, 4);
+golden_core_engine_test!(golden_core_wave_terrain, 5);
+golden_core_engine_test!(golden_core_string_machine, 6);
+golden_core_engine_test!(golden_core_chiptune, 7);
+golden_core_engine_test!(golden_core_virtual_analog, 8);
+golden_core_engine_test!(golden_core_waveshaping, 9);
+golden_core_engine_test!(golden_core_fm, 10);
+golden_core_engine_test!(golden_core_grain, 11);
+golden_core_engine_test!(golden_core_additive, 12);
+golden_core_engine_test!(golden_core_wavetable, 13);
+golden_core_engine_test!(golden_core_chord, 14);
+golden_core_engine_test!(golden_core_speech, 15);
+golden_core_engine_test!(golden_core_swarm, 16);
+golden_core_engine_test!(golden_core_noise, 17);
+golden_core_engine_test!(golden_core_particle, 18);
+golden_core_engine_test!(golden_core_string, 19);
+golden_core_engine_test!(golden_core_modal, 20);
+golden_core_engine_test!(golden_core_bass_drum, 21);
+golden_core_engine_test!(golden_core_snare_drum, 22);
+golden_core_engine_test!(golden_core_hihat, 23);
+
+#[test]
+fn golden_level_cv_trigger_scenarios() -> Result<(), Box<dyn Error>> {
+    let configs = level_cv_trigger_configs()?;
+    let expected_scenarios = configs.len();
+    check_golden_group(
+        "level-CV trigger",
+        expected_scenarios,
+        move |mode, verify_repeatability| {
+            let recorded = render_config_scenarios(configs, mode, verify_repeatability)?;
+            validate_level_cv_gate_sensitivity(&recorded)?;
+            Ok(recorded)
+        },
+    )
+}
+
+#[test]
+fn golden_random_seed_scenarios() -> Result<(), Box<dyn Error>> {
+    let configs = random_scenario_configs()?;
+    let expected_scenarios = configs.len();
+    check_golden_group(
+        "random-seed",
+        expected_scenarios,
+        move |mode, verify_repeatability| {
+            let recorded = render_config_scenarios(configs, mode, verify_repeatability)?;
+            validate_random_seed_sensitivity(&recorded)?;
+            Ok(recorded)
+        },
+    )
+}
+
+#[test]
+fn golden_six_op_depth_scenarios() -> Result<(), Box<dyn Error>> {
+    check_config_group("six-op depth", six_op_depth_configs()?)
+}
+
+#[test]
+fn golden_coupling_scenarios() -> Result<(), Box<dyn Error>> {
+    check_golden_group("coupling", 4, |mode, verify_repeatability| {
+        let mut recorded = BTreeMap::new();
+        render_and_insert_coupling_scenarios(&mut recorded, mode, verify_repeatability)?;
+        Ok(recorded)
+    })
+}
+
+#[test]
+fn golden_engine_switch_scenarios() -> Result<(), Box<dyn Error>> {
+    check_golden_group("engine-switch", 2, |mode, verify_repeatability| {
+        let mut recorded = BTreeMap::new();
+        render_and_insert_engine_switch(&mut recorded, mode, verify_repeatability)?;
+        Ok(recorded)
+    })
+}
+
+#[test]
+fn golden_clone_continuation_scenarios() -> Result<(), Box<dyn Error>> {
+    check_golden_group("clone-continuation", 32, |mode, verify_repeatability| {
+        let mut recorded = BTreeMap::new();
+        render_and_insert_clone_continuations(&mut recorded, mode, verify_repeatability)?;
+        Ok(recorded)
+    })
 }
 
 #[test]
@@ -2040,48 +2377,13 @@ fn paired_scenarios_observe_zero_and_legacy_edges_seven_blocks_apart() {
 
 #[test]
 fn every_manifest_producing_scenario_remains_on_legacy_delay() {
-    let mut configs = core_scenario_configs()
-        .unwrap()
-        .into_values()
-        .collect::<Vec<_>>();
-    configs.extend(level_cv_trigger_configs().unwrap().into_values());
-    configs.extend(random_scenario_configs().unwrap().into_values());
-    configs.extend(six_op_depth_configs().unwrap().into_values());
-
-    let (noise, particle) = coupling_voice_configs().unwrap();
-    for render_order in [
-        CouplingOrder::NoiseThenParticle,
-        CouplingOrder::ParticleThenNoise,
-    ] {
-        configs.push(coupled_record_config(
-            &noise,
-            &particle,
-            render_order,
-            CoupledVoice::Noise,
-        ));
-        configs.push(coupled_record_config(
-            &particle,
-            &noise,
-            render_order,
-            CoupledVoice::Particle,
-        ));
-    }
-
-    for (period_blocks, _) in ENGINE_SWITCH_PERIODS {
-        configs.push(engine_switch_config(period_blocks).unwrap());
-    }
-
-    for (_, config, _) in clone_case_configs() {
-        configs.push(clone_record_config(&config, CloneContinuation::Original));
-        configs.push(clone_record_config(&config, CloneContinuation::Clone));
-    }
-
+    let configs = manifest_scenario_configs().unwrap();
     assert_eq!(configs.len(), 291);
-    for (index, config) in configs.iter().enumerate() {
+    for (name, config) in configs {
         assert_eq!(
             config.trigger_delay,
             TriggerDelay::LegacyEight,
-            "primary delay for scenario {index}"
+            "primary delay for scenario {name:?}"
         );
         match &config.execution {
             ExecutionConfig::Coupled {
@@ -2089,7 +2391,7 @@ fn every_manifest_producing_scenario_remains_on_legacy_delay() {
             } => assert_eq!(
                 *peer_trigger_delay,
                 TriggerDelay::LegacyEight,
-                "peer delay for scenario {index}"
+                "peer delay for scenario {name:?}"
             ),
             ExecutionConfig::EngineSwitch {
                 alternate_trigger_delay,
@@ -2097,7 +2399,7 @@ fn every_manifest_producing_scenario_remains_on_legacy_delay() {
             } => assert_eq!(
                 *alternate_trigger_delay,
                 TriggerDelay::LegacyEight,
-                "alternate delay for scenario {index}"
+                "alternate delay for scenario {name:?}"
             ),
             ExecutionConfig::Single | ExecutionConfig::CloneContinuation { .. } => {}
         }

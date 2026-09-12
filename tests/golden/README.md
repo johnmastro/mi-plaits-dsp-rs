@@ -7,3 +7,7 @@
 Run `cargo test --test golden` to check the manifest. Set `GOLDEN=record` to
 replace it intentionally, or `GOLDEN=wav` to check it and write stereo
 listening files beneath `out/golden/`.
+
+Normal checks are split into conceptual scenario groups so independent voices
+render in parallel. Record and WAV modes use one aggregate render to keep
+manifest and artifact production coordinated.
